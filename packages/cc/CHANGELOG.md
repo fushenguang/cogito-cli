@@ -1,5 +1,11 @@
 # @cogito.ai/cli
 
+## 0.2.0
+
+### Minor Changes
+
+- 0af3cb5: First release of `@cogito.ai/cc` (`cc`) — the game-specific CLI line extracted from AgentDock: template registry + `init` + skills channel + auth. Ships the game-web-phaser template.
+
 ## 0.21.0
 
 ### Minor Changes
@@ -41,6 +47,7 @@
   没有为任何具体游戏写特判——判据只依赖清单自己的保留字声明。
 
   测试（`tests/asset-usage.test.mjs`，20→24 用例）：
+
   - **REGRESSION（trial-08 字面形状）**：declared `player`/`companion`/
     `antagonist`、全部加载、`usedInScene=[companion]` ⇒ `passed: false`、
     `reason` 点名 `player`——即真实事故的原样输入。
@@ -87,6 +94,7 @@
   「did not move」是**结论**。这一版只打印前者。
 
   改动全部是**减法**：
+
   - 实体差分行不再附加任何散文。`~` / `=` / `+` / `-` 保留——它们是状态标记
     （变了 / 没变 / 只在后一侧 / 只在前一侧），用一个字符说数字已经说过的事，
     不是判词。`appeared at` / `disappeared` 这两句也换成了对称的 `(—) -> (x, y)`。
@@ -133,6 +141,7 @@
   之后，模型的注意力预算不用再花在"怎么写正确的 eval 表达式"上。
 
   两条实测得来的行为写进了脚本本身，不再依赖谁记得：
+
   - **`applyState()` 在新场景真正生效之前就 resolve 了**。实测：`applyState('Game', 1)`
     返回 `true`，紧接着的 `getSnapshot()` 读到的 `stateId` **仍然是旧的**，约 300ms 后
     才是新的。脚本默认等 400ms（`--settle` 可调），**不给调成 0 的理由**——读太早会让
@@ -166,6 +175,7 @@
   ——`title`/`bgm`/`"bg-level"+N`/否则视为角色，镜像 `game-assets.ts` 的同名常量，
   不导入，理由与 `harness-types.ts` 手工镜像 `DeclaredAssetKind` 完全一致，
   `tests/asset-usage.test.mjs` 新增一条 drift 测试防止两边分叉）：
+
   - **bgm**——声明了就必须在 `usedInScene` 里，否则失败。
   - **背景**——声明了就要求**至少一个**声明的背景在用，不要求「每一关的背景都
     在用」：一次快照只扫描当前激活的场景，本轮探针根本没访问过的关卡，它的背景
@@ -202,6 +212,7 @@
 
   真机证据（脚手架出的独立项目，`PLAYWRIGHT_BROWSERS_PATH` 指向本机
   ms-playwright 缓存，`pnpm install && pnpm verify`，三个场景）：
+
   - **无 `public/game-assets.json`**：`AU asset usage — absent`，
     `passed: true`，exit 0——与改动前逐字节一致。
   - **声明 title/bg-level1/角色 player/bgm，全部合成素材真实放在
@@ -241,6 +252,7 @@ package.json`，在改动前的 `main` 上用 `git stash` 核实过同样超时�
   修复前占位符根本没被替换，这个问题一直被那个更早的缺陷掩盖着。
 
   **这一刀只解耦 `name` 的两个用途，不改任何既有行为**：
+
   - `scaffoldProject()`（`packages/cli/src/core/scaffold.ts`）的
     `ScaffoldOptions` 新增可选 `displayName?: string`。提供时，
     `replaceProjectNamePlaceholder(targetDir, displayName ?? name)` 改用它
@@ -289,6 +301,7 @@ web-nextjs: rewrites root package.json`，`git stash` 核实在改动前的 `mai
 
   这一刀给 `pnpm verify` 加一道新闸门 **AU（素材使用）**，紧跟在 BH-2 之后、
   IA 之前，回答两个问题：
+
   1. **清单里列出的素材，有几个真的进了运行时**——`src/debug/harness.ts` 新增
      `readAssetUsage()`：从 `PreloadScene` 已经缓存的清单原始文本（新导出常量
      `game-assets.ts` 的 `GAME_ASSETS_RAW_CACHE_KEY`，避免"同一事实存两份"）
@@ -305,6 +318,7 @@ web-nextjs: rewrites root package.json`，`git stash` 核实在改动前的 `mai
   字段的 `null` 约定一致。新增 `scripts/lib/asset-usage.mjs` 的纯函数
   `judgeAssetUsage()`，把一个或多个快照的 `assets` 字段合并判成三态，与
   `assert.mjs`/`exit-decision.mjs` 已有的 IA 三态纪律完全一致：
+
   - **`absent`**——本次运行每个快照的 `assets` 都是 `null`（没有清单）。**不算
     失败**：大多数已生成项目从未声明过清单。
   - **`unavailable`**——一个快照都没有带 `assets` 字段（构建自更旧的、还没有
@@ -332,6 +346,7 @@ web-nextjs: rewrites root package.json`，`git stash` 核实在改动前的 `mai
   真机证据（`agentdock init` 脚手架出的三个独立项目，
   `PLAYWRIGHT_BROWSERS_PATH` 指向本机 ms-playwright 缓存，`pnpm install &&
 pnpm verify`）：
+
   - **无 `public/game-assets.json`**（常态）：`AU asset usage — absent`，
     `.verify-result.json` 无 `AU` 行，`passed: true`，exit 0，与改动前完全一致。
   - **声明 `characters.guard`（合成 PNG）、但模板默认代码从不绘制非
@@ -365,6 +380,7 @@ loaded (guard) but none of them are referenced by any GameObject...`，
 - 593f593: `init` 脚手架出来的项目里，`{{PROJECT_NAME}}` 直接原样出现在玩家能看到的地方——
   `game-web-phaser` 开始页标题、浏览器标签页、以及三个模板的 `README.md`——因为
   `init` 一直只是把模板拷贝过去，从没拿 `--name` 替换过这个占位符。
+
   - `scaffoldProject`（`packages/cli/src/core/scaffold.ts`）在拷贝模板、改写
     `package.json` 之后，新增一步 `replaceProjectNamePlaceholder`：把目标目录里
     所有文本文件中的 `{{PROJECT_NAME}}`（单一来源常量 `PROJECT_NAME_PLACEHOLDER`）
@@ -375,7 +391,7 @@ loaded (guard) but none of them are referenced by any GameObject...`，
   - 跳过 `node_modules`、`.git`、`dist` 三个目录，不管出现在树的哪一层
   - `--name` 的值会原样落进 HTML `<title>` 文本节点与 TS/JS 字符串字面量。两条
     路线里选了**校验而非转义**：新增 `validateProjectName`，在动文件系统之前
-    拒绝含 `< > & " ' \`` \\` 或控制字符的名字（`scaffoldProject` 新增
+    拒绝含 ` < > & " ' \`` \\ ` 或控制字符的名字（`scaffoldProject` 新增
     `INVALID_NAME` 错误分支）。选校验不选转义的原因写在代码注释里——转义要按
     每个文件的语法上下文分别处理（HTML 用实体编码、TS 字符串用 JS 转义……），
     漏一个新文件/新上下文就静默出错；校验只有一处，两个适配器（agent/human）
@@ -394,6 +410,7 @@ loaded (guard) but none of them are referenced by any GameObject...`，
 
   这一刀把"新写的可玩场景怎么消费 `game-assets.json` 清单里的素材"固化成
   `game-flow-and-hud` skill 里的明文约定，不再依赖 `GameScene` 这一个类存活：
+
   - `src/game-assets.ts` 新增 `applyLevelBackground(scene, level, width, height)`——
     一个鸭子类型（`BackgroundHostScene`）的共享 helper：检查关卡背景纹理是否已加载，
     加载了就居中绘制、按尺寸铺满、`setDepth(-1)` 压到最底层；没加载就是纯粹的
@@ -425,6 +442,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
 
   真机证据（`agentdock init` 脚手架出的独立项目，`PLAYWRIGHT_BROWSERS_PATH` 指向
   本机 ms-playwright 缓存）：
+
   - 无 `public/game-assets.json`（常态）：`pnpm install && pnpm verify` — BH-0/
     BH-1/BH-2 全过，IA 7/7 全过，`.verify-result.json` `passed: true`。
   - 补一份带 `backgrounds.level1` + `characters.player` 的合成 manifest 与合成
@@ -445,6 +463,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
 - 791fa53: `game-web-phaser` 模板新增开始页（`StartScene`）与平台素材投递契约
   (`game-assets.json`)，落实构建者的两条方向：「即使是原型也从开始页做起，当成完整
   游戏」，以及「背景音乐/背景/人物直接用 AI 生成，而不是用形状代替」：
+
   - **`StartScene`**：接入 `Boot -> Preload -> Start -> Game` 链路，成为进入
     `Game` 的唯一入口（标题读 `document.title`、副标、「开始游戏」按钮）。同步更新
     `debug/state-jump.ts`（`StateId` 新增 `'Start'`）与 `debug/harness.ts`
@@ -487,6 +506,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
   `.changeset/` 当时全部漏加，`npm pack @cogito.ai/cli@0.17.0` 实测解包后 `game-doc` /
   `doc-panel` / `UiScene` / `game-flow-and-hud` 零命中——脚手架出来的项目此前一直拿不到
   这三刀）：
+
   - **HUD 带 + 独立 UI Scene**：`dimensions.ts` 新增 `HUD_BAND_HEIGHT` /
     `PLAYFIELD_HEIGHT` 常量，把「世界几何必须落在可玩区、HUD 必须落在 HUD 带」这条约束
     前移到骨架层；新增并行的 `UiScene`（`registry.events` 事件驱动更新 + `SHUTDOWN`
@@ -511,6 +531,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
 
   **背景**：这些 skill 随 Phaser 4 升级已经装进每个生成项目的 `node_modules`，但此前没有
   任何通道把它们接到 Shelley 的 skill 目录——素材在磁盘上，执行者看不见、也不会自己去翻。
+
   - 路径由 `${HOME}` 在运行时推导，不硬编码 `/root/.config` 或 `/.config`
     （VM guest 里 `HOME=/`，硬编码会静默失效）
   - 守卫：`${HOME}/.config/shelley` 不存在时 no-op、退出 0——开发者本机不会被写入
@@ -531,6 +552,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
   写出了一条 `source` 指向私有仓库的 manifest 条目，装的人会在 `git clone` 那一步失败，
   私有仓库地址也就此进了一份公开文件——而人类可读输出和 `--json` 都没有任何信号能看出
   这一层。
+
   - 人类/agent 两种输出模式都新增一行 `source: <url> (path: <path>)`，无论是否与
     `--registry` 一致都会打印
   - 当 skill 自己仓库的 `origin` 与 `--registry` checkout 自己的 `origin` 不同（且两者都
@@ -555,6 +577,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
   **这修的是一个真实的付费绕过**：registry 之前只存到仓库根 URL，安装门用它下载时会把
   该仓库下**全部** skill 一起装下来——在一个多 skill 仓库里装一个免费 skill，会连同仓库里
   的付费 skill 一起被装进去（thefoolai 侧已先上线止血）。
+
   - 请求体新增 `path?`（镜像 manifest 条目自身的 `path` 字段，skill 在仓库根目录时省略）
     与必填的 `branch`（`git branch --show-current`，取不到时回退 `main`）
   - 索引失败时的报错更可操作：非 2xx 响应会读服务端 JSON body 的 `message`，不再折叠成
@@ -578,6 +601,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
   一直没跟上——本次落地，不重开讨论。
 
   改了什么：
+
   - `templates/game-web-phaser/package.json`：`phaser` 依赖版本升级，lockfile 同步锁定 `4.2.1`
   - 新增 `templates/game-web-phaser/.npmrc`，固定指向 `mirrors.tencent.com/npm`——本机默认源
     `registry.npmmirror.com` 上的 `phaser@4.2.1` 直接 404（该源的 phaser 副本停在 2026-04-10、
@@ -592,6 +616,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
 
   不在本次范围内（各有独立理由，见
   `openspec/changes/phaser4-template-upgrade/design.md`）：
+
   - cogito-lib 的 `PLATFORM_CONTEXT`（它是喂给每一次 Run 的全局常量，翻转会让存量 Phaser 3
     项目被错误地告知按 Phaser 4 写——需要单独设计，已记入 backlog）
   - 把 28 个 skill 接进 Shelley 的 skill 目录
@@ -612,6 +637,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
 
   模板 `AGENTS.md` 规则 6 早就写着"handler 只能做真实玩家能造成的事"，但那一条**明写着靠人工
   review 兜、不靠类型系统**——这次就是它失效了。所以本次改的不是补一条规矩，是让平台自己判：
+
   - **触发器完整性**：`fire()` 在**同步**调用 handler 的前后各读一次名为 `player` 的实体坐标
     （两次读取之间没有 `await`，其间不可能插入物理步，因此自然位移必为 0，任何差值都只能是
     handler 自己造成的）。坐标变化即抛错，该条断言以「触发器违规」计红——**等值比较，无阈值**，
@@ -642,6 +668,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
   `access_tier` / `is_official` / 任何扫描或安全状态字段全部由服务端赋值，CLI 从不携带。
 
   边界（未变化的行为）：
+
   - 未登录时**不发请求**，`skill publish` 照常只写 manifest
   - 请求失败（含端点不可达、超时、非 2xx）**只告警，绝不阻塞、绝不回滚**已经写好的 manifest
   - **不重试**——一次性、15s 超时的尽力而为调用，不是登录轮询那种退避重试
@@ -659,6 +686,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
   才能用，否则直接报 `PROVIDER_NOT_CONFIGURED`。现在 CLI 改为调用 provider 的
   `{webUrl}/api/device-auth/consume` HTTP 端点（而不是直连 PostgREST RPC），不再
   需要任何密钥——**装完就能登录**，不用先配置环境变量。
+
   - `agentdock auth login`：打开系统浏览器完成授权，凭据保存到 `~/.agentdock/credentials.json`（权限 `0600`）
   - `agentdock auth logout`：清除本地凭据
   - `agentdock auth status`：查看当前登录身份（从不打印 token）
@@ -679,6 +707,7 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
   manifest 条目现在可以带一个 `version` 字段，从 `SKILL.md` frontmatter 的
   `metadata.version`（或 thefoolai 现有的 `metadata['thefool.version']`）读取——
   **不读顶层 frontmatter**，因为 Agent Skills 规范本身没有 `version` 这个顶层键。
+
   - 提供的版本必须是合法 semver（`major.minor.patch`，可选 `-prerelease` /
     `+build` 后缀，例如 `1.2.3` 或 `1.2.3-beta.1`）；`v1.2.0`、`2026-08-19`、
     `1.x`、`latest` 这类形状一律在 publish 时直接拒绝（`SKILL_VERSION_INVALID`），
@@ -694,13 +723,13 @@ missing or empty`——比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS` 
 - ccdba3a: `skills-registry` 模板新增第四道 CI 门：`scripts/gates/license-provenance.mjs`（`pnpm
 gate:license-provenance`，已接入 `pnpm gates` 与 `.github/workflows/gates.yml`）。
 
-  既有三道门都不回答"我有没有权利发布这个 skill"：门①查结构合法、门②查 manifest 新鲜、门③查
+  既有三道门都不回答"我有没有权利发布这个 skill"：门 ① 查结构合法、门 ② 查 manifest 新鲜、门 ③ 查
   有没有泄漏宿主自己的身份——第三方版权与宿主身份是正交的两件事，一份 `© <year> <holder>` 声明
-  里没有一个字符属于宿主，门③永远不会看它一眼。这道缺口是真实发生过的：三道门全绿、8 个 skill
-  被门③判为"干净"，逐个打开许可才发现其中 5 个不是自有内容（2 个供应商专有、3 个
+  里没有一个字符属于宿主，门 ③ 永远不会看它一眼。这道缺口是真实发生过的：三道门全绿、8 个 skill
+  被门 ③ 判为"干净"，逐个打开许可才发现其中 5 个不是自有内容（2 个供应商专有、3 个
   Apache-2.0）——差一步把别人的专有内容推成公开 MIT 仓。
 
-  门④对每个 `skills/<name>/` 收集三类证据（目录内 `LICENSE*`/`NOTICE*` 文件、`SKILL.md`
+  门 ④ 对每个 `skills/<name>/` 收集三类证据（目录内 `LICENSE*`/`NOTICE*` 文件、`SKILL.md`
   frontmatter 的 `license` 字段、正文中的版权声明形状）并与新增的 `license-policy.json`
   （仓库自身许可 + 允许转发的第三方许可白名单 + 已登记的转发 skill 列表，数据不是代码）比对。
   默认保守：发现任何证据且未显式登记为"第三方转发"即失败；已登记的转发 skill 仍需声明许可在
@@ -718,11 +747,12 @@ gate:license-provenance`，已接入 `pnpm gates` 与 `.github/workflows/gates.y
 
   用于初始化一个公开的 Agent Skills 内容仓：`skills/<name>/SKILL.md` 正典 + 根目录生成的
   `skills.json` manifest + Fumadocs 文档站，并预置三道 day-one CI 门（纯 Node ESM，零构建步骤）：
-  - 门①全量校验——对 `skills/` 下每一个目录跑 `agentdock skill validate`，不是只跑改动的
-  - 门②manifest 新鲜度——重新 publish 全部 skill 与已提交的 `skills.json` 对账（忽略
+
+  - 门 ① 全量校验——对 `skills/` 下每一个目录跑 `agentdock skill validate`，不是只跑改动的
+  - 门 ②manifest 新鲜度——重新 publish 全部 skill 与已提交的 `skills.json` 对账（忽略
     `publishedAt`，逐字比较其余字段），同时校验 `apps/docs/content/docs/skills/*` 是否与
     `skills.json` 保持同步
-  - 门③公私边界——按可配置的 `boundary-rules.json` 正则表扫描全部 git 跟踪文件，拦截私有仓路径 /
+  - 门 ③ 公私边界——按可配置的 `boundary-rules.json` 正则表扫描全部 git 跟踪文件，拦截私有仓路径 /
     内部域名 / 个人可识别模式
 
   由 `web-nextjs` 模板派生，去掉 `apps/web`、`supabase/`、`packages/openspec-docs-sync/`；
@@ -833,6 +863,7 @@ gate:license-provenance`，已接入 `pnpm gates` 与 `.github/workflows/gates.y
   with what it expected vs. what it found; it never prints "skipping" and exits 0.
 
   Also new in this template:
+
   - A `listStates()` / `jump(id, seed?)` / `isValidStart(id, state)` state-jump
     contract (`src/debug/state-jump.ts`) plus a minimal Boot/Preload/Game reference
     implementation and a traversal assertion (`tests/state-jump.test.mjs`) that
@@ -857,6 +888,7 @@ gate:license-provenance`，已接入 `pnpm gates` 与 `.github/workflows/gates.y
   own `engines.node` requirement is unchanged.
 
   Also in this release:
+
   - `verify.mjs` writes a machine-readable `.verify-result.json` (gate ids, pass/fail,
     detail) so the outcome can be surfaced outside the VM. It is written on failure as
     well as success — a verification layer that is invisible exactly when it has
@@ -882,6 +914,7 @@ gate:license-provenance`，已接入 `pnpm gates` 与 `.github/workflows/gates.y
   natural-language goal, hand-wrote vanilla JS + Canvas from scratch and shipped a
   canvas-offset bug and a space-key hang. Prose in the prompt did not prevent it.
   This template encodes the constraints as executable scaffolding instead:
+
   - Phaser's Scale Manager (`FIT` + `CENTER_BOTH`) so the canvas cannot drift out
     of the visible area
   - A conventional input setup that stops space/arrow keys from scrolling the page
