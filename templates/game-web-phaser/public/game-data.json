@@ -2,44 +2,14 @@
   "levels": [
     {
       "id": "level-1",
-      "name": "第一关：捡星尘",
+      "name": "示例：空跑道（正式开工时整体替换本文件）",
       "backgroundLevel": 1,
       "playerSpawn": {
         "x": 480,
         "y": 396
       },
-      "initialCoins": [
-        {
-          "x": 160,
-          "y": 120
-        },
-        {
-          "x": 300,
-          "y": 240
-        },
-        {
-          "x": 480,
-          "y": 100
-        },
-        {
-          "x": 660,
-          "y": 240
-        },
-        {
-          "x": 800,
-          "y": 120
-        }
-      ],
-      "initialObstacles": [
-        {
-          "x": 240,
-          "y": 360
-        },
-        {
-          "x": 720,
-          "y": 360
-        }
-      ]
+      "initialCoins": [],
+      "initialObstacles": []
     }
   ],
   "rules": {

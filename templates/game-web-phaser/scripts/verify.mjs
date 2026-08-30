@@ -17,6 +17,26 @@
 //                   scripts/lib/asset-usage.mjs's header for the real
 //                   incident (add.image hit-count 0 across every level,
 //                   despite every other gate passing) that motivated this.
+//   FD    front door — the page loads to the title state and a real click
+//                   on the start button (CDP mouse event at the button's
+//                   canvas coordinates) actually lands in the gameplay-
+//                   role state. Added 2026-08-30 (`cogito-cli` extraction):
+//                   every state-jump gate below is structurally blind to
+//                   this path — platform M1 run1 shipped scaffold demo
+//                   content to the builder with all gates green because
+//                   nothing ever walked in through the front door.
+//   BH-3  gameplay-scene render — STRICT screenshot floor on the state the
+//                   player actually plays, applied only when assets are
+//                   declared (AU judged). Platform M1 run2: BH-2 sampled
+//                   the boot/title frame both rounds (identical 164030
+//                   colours) while the gameplay frame was 87% one colour,
+//                   835 unique colours, ~8KB — a "rendered" void. BH-2's
+//                   default floor (2 colours) cannot see this; BH-3's
+//                   unique-colour floor + dominant-colour ceiling can.
+//                   Not applied when AU is absent (fresh scaffold's
+//                   placeholder world is near-void BY DESIGN — the strict
+//                   floor keys on "this project declared a world, so show
+//                   me one").
 //   IA    assertions — machine-judgable acceptance items from
 //                   assertions.json, judged against window.__gameHarness
 //                   (see scripts/assert.mjs).
@@ -75,6 +95,14 @@ const DIST_DIR = join(PROJECT_ROOT, 'dist-play')
  * for a field they don't even use yet.
  */
 const RESULT_FILE = join(PROJECT_ROOT, '.verify-result.json')
+
+// BH-3 strict floor (CALIBRATED 2026-08-30 against the M1 run2 void: 835
+// unique colours / dominant 0.87 on a gameplay frame that shipped to the
+// builder; a demo frame with drawn content measured 2-3 orders above these).
+const GAMEPLAY_MIN_UNIQUE_COLORS = 5_000
+const GAMEPLAY_MIN_VARIANCE = 40
+const GAMEPLAY_MAX_DOMINANT_RATIO = 0.8
+
 const gateResults = []
 let resultWritten = false
 
@@ -361,6 +389,62 @@ async function main() {
     // this one already proved.
     const firstBoundsSnapshot = await sampleEntityBounds('first')
 
+    // ---- FD (front-door walk) ----
+    // Runs while the page is still in whatever state boots (Start), BEFORE
+    // any applyState() below — the whole point is the real entry path. The
+    // click is a CDP mouse event at the start button's canvas coordinates
+    // (StartScene's button center, design-space 960x540 mapped through the
+    // canvas bounding rect), not a state jump.
+    let fdPassed = true // stays true when not applicable (D3 shape: visible, not fatal)
+    const statesForDoor = await harness.listStates()
+    const gameplayForDoor = statesForDoor.find((s) => s.role === 'gameplay') ?? null
+    if (gameplayForDoor === null) {
+      fdPassed = true
+      recordGate('FD', '前门', true, 'no state with role "gameplay" — front-door walk not applicable (D3: visible, not fatal)')
+      console.log('[verify] FD front door — no gameplay-role state, walk not applicable')
+    } else {
+      const canvasRect = await inspected.client.send(
+        'Runtime.evaluate',
+        {
+          expression:
+            '(() => { const c = document.querySelector("canvas"); if (!c) return null; const r = c.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height } })()',
+          returnByValue: true,
+        },
+        inspected.sessionId,
+      )
+      const rect = canvasRect?.result?.value
+      if (rect === null || rect === undefined) {
+        fail('FD front door', 'a <canvas> element to click into', 'document.querySelector("canvas") returned nothing')
+      }
+      // StartScene.drawStartButton(): rectangle at (GAME_WIDTH/2, GAME_HEIGHT/2+60) in 960x540 design space
+      const clickX = rect.left + (480 / 960) * rect.width
+      const clickY = rect.top + (330 / 540) * rect.height
+      for (const type of ['mousePressed', 'mouseReleased']) {
+        await inspected.client.send(
+          'Input.dispatchMouseEvent',
+          { type, x: clickX, y: clickY, button: 'left', clickCount: 1 },
+          inspected.sessionId,
+        )
+      }
+      await harness.wait(800)
+      const doorSnapshot = await harness.getSnapshot()
+      const doorState = statesForDoor.find((st) => st.id === doorSnapshot.stateId) ?? null
+      const doorReached = doorState !== null && doorState.role === 'gameplay'
+      fdPassed = doorReached
+      recordGate(
+        'FD',
+        '前门',
+        doorReached,
+        doorReached
+          ? `title → click 开始游戏 → gameplay state "${doorSnapshot.stateId}"`
+          : `after clicking 开始游戏 the harness state is "${doorSnapshot.stateId}" (role ${doorState?.role ?? '?'}) — the front door does not reach the gameplay state`,
+      )
+      console.log(`[verify] FD front door — ${doorReached ? 'passed' : 'FAILED'} (stateId=${doorSnapshot.stateId})`)
+      if (!doorReached) {
+        fail('FD front door', 'clicking 开始游戏 lands in the gameplay-role state', `stateId is "${doorSnapshot.stateId}"`)
+      }
+    }
+
     const bh2CanvasDetail =
       `canvas ${inspected.canvasWidth}x${inspected.canvasHeight}, ` +
       `${judged.uniqueColors} unique colours, variance ${judged.variance.toFixed(2)}`
@@ -434,6 +518,42 @@ async function main() {
       )
     }
 
+    // ---- BH-3 (gameplay-scene render, strict) ----
+    // Screenshot the state the player plays — we are in it: sample two's
+    // applyState(gameplay) above is the last state change, and neither the
+    // FD walk (before sample two) nor AU moved us. Strict floor applies
+    // ONLY when the project declared assets (AU `judged`): a declared
+    // world must be drawn; an undeclared one (fresh scaffold placeholder)
+    // gets BH-2's loose floor only.
+    let bh3Passed = true
+    if (assetUsageResult.status === 'judged' && secondBoundsSnapshot !== null) {
+      const gameplayShot = await inspected.client.send('Page.captureScreenshot', { format: 'png' }, inspected.sessionId)
+      const gameplayDecoded = decodePng(gameplayShot.data)
+      const gameplayJudge = judgeScreenshotNonEmpty(gameplayDecoded, {
+        minUniqueColors: GAMEPLAY_MIN_UNIQUE_COLORS,
+        minVariance: GAMEPLAY_MIN_VARIANCE,
+        maxDominantRatio: GAMEPLAY_MAX_DOMINANT_RATIO,
+      })
+      bh3Passed = gameplayJudge.nonEmpty
+      const gameplayDetail =
+        `gameplay scene ${inspected.canvasWidth}x${inspected.canvasHeight}: ` +
+        `${gameplayJudge.uniqueColors} unique colours, variance ${gameplayJudge.variance.toFixed(2)}, ` +
+        `dominant ${gameplayJudge.dominantRatio.toFixed(3)} — floor ${GAMEPLAY_MIN_UNIQUE_COLORS} colours / ceiling ${GAMEPLAY_MAX_DOMINANT_RATIO}`
+      recordGate('BH-3', '场景渲染', gameplayJudge.nonEmpty, gameplayDetail)
+      console.log(`[verify] BH-3 gameplay render — ${gameplayJudge.nonEmpty ? 'passed' : 'FAILED'} (${gameplayDetail})`)
+      if (!gameplayJudge.nonEmpty) {
+        fail('BH-3 gameplay render', `unique colours >= ${GAMEPLAY_MIN_UNIQUE_COLORS}, variance >= ${GAMEPLAY_MIN_VARIANCE}, dominant colour share <= ${GAMEPLAY_MAX_DOMINANT_RATIO}`, gameplayJudge.reason)
+      }
+    } else {
+      recordGate(
+        'BH-3',
+        '场景渲染',
+        true,
+        'strict floor not applied — no declared assets (AU absent) or no gameplay observation window; fresh-scaffold placeholder visuals are covered by BH-2 only',
+      )
+      console.log('[verify] BH-3 gameplay render — not applicable (no declared assets / no gameplay window)')
+    }
+
     // ---- IA (ia-assertion-runner, design D7) ----
     // 🔴 Same CDP session (`inspected.client`/`inspected.sessionId`), no
     // second page load. BH-1's evidence is handed straight to `loads_clean`'s
@@ -461,7 +581,10 @@ async function main() {
     // contract only needs one boolean for "did the non-IA half of the run
     // pass", so folding AU into it is the same shape IA itself already
     // established, not a new concept.
-    const verdict = decideVerdict({ bhPassed: auPassed, assertions: assertionsResult })
+    // 🔴 FD and BH-3 fold into `bhPassed` exactly like AU: a red gate that
+    // leaves the verdict alone is not a gate (the M1 run2 lesson).
+    const nonIaPassed = auPassed && fdPassed && bh3Passed
+    const verdict = decideVerdict({ bhPassed: nonIaPassed, assertions: assertionsResult })
     if (assertionsResult.status !== 'absent') {
       recordGate(
         'IA',
@@ -478,7 +601,7 @@ async function main() {
 
     // `process.exitCode` (not `process.exit()`) so the `finally` block below
     // still runs its cleanup before Node actually exits.
-    const exitCode = decideExitCode({ bhPassed: auPassed, assertions: assertionsResult })
+    const exitCode = decideExitCode({ bhPassed: nonIaPassed, assertions: assertionsResult })
     if (exitCode !== 0) {
       // 🔴 Before AU existed, reaching `exitCode !== 0` here was only
       // possible via IA (bhPassed was a hardcoded `true`) — so the `else`
