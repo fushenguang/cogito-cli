@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>{{PROJECT_NAME}}</title>
+    <style>
+      /*
+       * This reset is not decorative — it is half of the fix for the
+       * "canvas is positioned wrong / content below is unreachable" bug
+       * this template was created to prevent.
+       *
+       * The default browser stylesheet gives <body> an 8px margin and lets
+       * the page grow taller than the viewport. Combined with a canvas that
+       * is NOT centered by its parent, that stray margin silently shifts
+       * the whole game board a few pixels off from where Phaser's Scale
+       * Manager thinks it placed it, and anything below the fold becomes
+       * impossible to reach without scrolling. Phaser's `Scale.FIT` +
+       * `Scale.CENTER_BOTH` (see src/config.ts) only centers the canvas
+       * *inside its parent element* — it does nothing about the parent
+       * itself, so the parent must be pinned to the full viewport here.
+       */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        /* Chinese/CJK copy: system font stack, no font files to ship or load. */
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          'PingFang SC',
+          'Microsoft YaHei',
+          sans-serif;
+      }
+
+      #app {
+        width: 100%;
+        height: 100%;
+        /*
+         * Do NOT add flexbox/grid centering (`display: flex` +
+         * `align-items`/`justify-content`) here. Phaser's Scale Manager
+         * (`Scale.CENTER_BOTH` in src/config.ts) centers the <canvas>
+         * itself by setting its own margin/position directly — layering a
+         * second, CSS-driven centering on top of that double-applies the
+         * offset and throws the canvas off-center again (confirmed by
+         * hand: it shows up as an asymmetric gap, e.g. 60px on top vs 20px
+         * on the bottom, not the "content unreachable" failure this file
+         * exists to prevent, but a variant of the same bug class). Keep
+         * this element a plain 100%-sized box and let the Scale Manager
+         * own centering entirely.
+         */
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

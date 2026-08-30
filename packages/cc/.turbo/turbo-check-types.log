@@ -1,0 +1,4 @@
+
+> @cogito.ai/cli@0.19.3 check-types /Users/sunny/Desktop/Workspace/CogitoTech/agentdock/packages/cli
+> tsc --noEmit
+

@@ -1,0 +1,13 @@
+
+> @cogito.ai/cli@0.18.0 build /Users/sunny/Desktop/Workspace/CogitoTech/agentdock/packages/cli
+> pnpm run generate-registry && bun build bin/agentdock.ts --outfile dist/index.js --target node && cp src/registry.json dist/registry.json && rm -rf dist/templates && mkdir -p dist/templates && rsync -a --exclude='node_modules/' --exclude='.next/' --exclude='.turbo/' ../../templates/ dist/templates/ && find dist/templates -name '.gitignore' -exec sh -c 'mv "$1" "${1%/*}/_gitignore"' _ {} \; && find dist/templates -name '.npmrc' -exec sh -c 'mv "$1" "${1%/*}/_npmrc"' _ {} \;
+
+
+> @cogito.ai/cli@0.18.0 generate-registry /Users/sunny/Desktop/Workspace/CogitoTech/agentdock/packages/cli
+> tsx ../../scripts/generate-registry/index.ts
+
+[generate-registry] Written 3 template(s) to /Users/sunny/Desktop/Workspace/CogitoTech/agentdock/packages/cli/src/registry.json
+Bundled 265 modules in 65ms
+
+  index.js  0.85 MB  (entry point)
+

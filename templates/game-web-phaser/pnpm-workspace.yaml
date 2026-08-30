@@ -1,0 +1,31 @@
+# 允许 esbuild 跑它的 postinstall（下载/链接平台二进制）。
+#
+# 🔴 为什么这个文件必须存在，以及为什么内容在这里而不在 package.json：
+#
+# pnpm 10 用的是 package.json 里的 `pnpm.onlyBuiltDependencies`；
+# **pnpm 11 改成了本文件里的 `allowBuilds`**（实测 pnpm 11.17.0：
+# `pnpm approve-builds --all` 写出来的就是下面这两行）。只写 package.json
+# 那份在 pnpm 11 上完全不生效。
+#
+# 不加会怎样（实测，不是推测）：`pnpm install` 报
+# `ERR_PNPM_IGNORED_BUILDS: esbuild`，随后**任何 `pnpm run <script>` 都跑不了**
+# ——pnpm 的 `runDepsStatusCheck` 会先拦下来。也就是说 `pnpm verify` 这道
+# 验证闸门装好了却一次都跑不起来，除非有人手动跑一次 `pnpm approve-builds`。
+# 一个需要人先做一步额外动作才能跑的闸门，对无人监督的执行者等于不存在。
+#
+# ⚠️ 这也是 M3 那次事故的真相：pnpm 自动写出了这个文件但值是待填的占位
+# （`esbuild: set this to true or false`），而它被未填就提交了。
+# 我们把它显式写死，就不会再有人拿到一个半成品文件。
+allowBuilds:
+  esbuild: true
+
+# 🔴 `packages` 是必填字段，不是可选项——实测（2026-08-22，标准 `agentdock init`
+# 脚手架出的独立项目，pnpm 9.0.0 与 npx pnpm@11.17.0 都复现）：这个文件一旦存在但
+# 没有 `packages` 键，`pnpm install` 直接报 `ERR_PNPM_INVALID_WORKSPACE_CONFIGURATION
+# packages field missing or empty`，比这个文件当初要修的 `ERR_PNPM_IGNORED_BUILDS`
+# 更早、更彻底地挡路——install 本身都跑不起来，`pnpm verify` 连门都摸不到。
+# 上面 allowBuilds 那次修复显然没有在一个真正独立（脱离 monorepo 根 pnpm-workspace.yaml）
+# 的目录里跑过 `pnpm install` 验证过，否则会当场撞见这个。
+# 这个模板不是多包 workspace，只是需要 `pnpm-workspace.yaml` 承载 allowBuilds 这一个
+# 设置，所以空数组就是正确值——不是占位，是"这里没有子包"的字面表达。
+packages: []

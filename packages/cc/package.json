@@ -1,0 +1,38 @@
+{
+  "name": "@cogito.ai/cc",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Cogito CLI (`cc`) – game-dev scaffold + fixed pipeline for humans and AI agents (extracted from AgentDock)",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "cc": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "pnpm run generate-registry && bun build bin/cc.ts --outfile dist/index.js --target node && cp src/registry.json dist/registry.json && rm -rf dist/templates && mkdir -p dist/templates && rsync -a --exclude='node_modules/' --exclude='.next/' --exclude='.turbo/' ../../templates/ dist/templates/ && find dist/templates -name '.gitignore' -exec sh -c 'mv \"$1\" \"${1%/*}/_gitignore\"' _ {} \\; && find dist/templates -name '.npmrc' -exec sh -c 'mv \"$1\" \"${1%/*}/_npmrc\"' _ {} \\;",
+    "generate-registry": "tsx ../../scripts/generate-registry/index.ts",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.1",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "citty": "^0.1.6",
+    "giget": "^1.2.4",
+    "skills-ref": "^0.1.5"
+  },
+  "devDependencies": {
+    "@cogito.ai/tsconfig": "workspace:*",
+    "@types/node": "^20.0.0",
+    "bun": "latest",
+    "vitest": "^4.1.8"
+  }
+}

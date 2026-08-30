@@ -1,0 +1,75 @@
+# Release — triggered on every push to main.
+# Uses Changesets to manage versioning across all publishable packages.
+#
+# Two modes (handled automatically by changesets/action):
+#   1. .changeset/*.md files exist  → opens/updates a "Version Packages" PR
+#   2. "Version Packages" PR merged → bumps versions + publishes changed packages to npm
+#
+# Which packages get published is determined entirely by Changesets based on
+# which .changeset entries were present — NOT by this workflow file.
+# Do NOT create per-package release workflows; Changesets is the single source of truth.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Never cancel a release in progress — partial publishes leave packages in an inconsistent state.
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create release PRs and tags
+      pull-requests: write  # open "Version Packages" PR
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # changesets needs full history for changelog
+
+      # CLI package uses `bun build` — must be installed before pnpm build
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          # Authenticate against npm registry for publishing
+          registry-url: https://registry.npmjs.org
+
+      - name: Configure npm auth
+        run: echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> .npmrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      # changesets/action does two things depending on state:
+      #  1. If .changeset/*.md files exist → opens/updates a "Version Packages" PR
+      #  2. If "Version Packages" PR is merged → publishes to npm
+      - name: Publish or open version PR
+        uses: changesets/action@v1
+        with:
+          publish: pnpm changeset:publish
+          version: pnpm changeset:version
+          commit: "chore: version packages"
+          title: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # NPM_TOKEN must be added as a repository secret:
+          # Settings → Secrets and variables → Actions → New repository secret
+          # Name: NPM_TOKEN
+          # Value: npm token with "Automation" type (publish scope)
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

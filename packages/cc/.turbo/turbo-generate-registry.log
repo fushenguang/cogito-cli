@@ -1,0 +1,5 @@
+
+> @cogito.ai/cli@0.18.0 generate-registry /Users/sunny/Desktop/Workspace/CogitoTech/agentdock/packages/cli
+> tsx ../../scripts/generate-registry/index.ts
+
+[generate-registry] Written 3 template(s) to /Users/sunny/Desktop/Workspace/CogitoTech/agentdock/packages/cli/src/registry.json

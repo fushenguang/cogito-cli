@@ -1,0 +1,11 @@
+# Intentionally minimal — `"files": ["dist/"]` in package.json controls what gets published.
+#
+# This file MUST exist so npm uses it instead of falling back to the root .gitignore.
+# The root .gitignore contains a bare `dist` pattern that matches any directory named
+# `dist` at any depth, which would strip `dist/templates/*/packages/*/dist/` (the
+# pre-built workspace packages inside the bundled templates).
+#
+# By having a local .npmignore, npm no longer reads the root .gitignore for this package,
+# and the `files` field alone controls inclusion — leaving nested dist/ directories intact.
+!.gitignore
+!.npmrc

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+dist-play
+dist-learn
+
+# verify.mjs 的机器可读结果——每次跑都会重写，是运行产物不是源码。
+# 上游产品从 VM 上读它来把门禁结论显示在 web 上（阶段二第 6 行）。
+.verify-result.json
+
+# Vite
+.vite
+*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs (agents redirect background server output here — see AGENTS.md)
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+
+# scripts/playtest.mjs 的截图产物——是给人看的一次性观测，不入库
+.playtest-screenshot.png

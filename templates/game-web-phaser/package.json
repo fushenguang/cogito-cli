@@ -1,0 +1,38 @@
+{
+  "name": "@cogito.ai/template-game-web-phaser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phaser 4 + Vite + TypeScript starter for AI coding agents building small browser games — Scale Manager (FIT/CENTER_BOTH) by default, capture-safe keyboard input, and a fixed port 8080 for VM share links",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install-phaser-skills.mjs",
+    "dev": "vite --host --port 8080 --strictPort",
+    "build": "vite build",
+    "build:play": "vite build --mode play",
+    "build:learn": "vite build --mode learn",
+    "preview": "vite preview --host --port 8080 --strictPort",
+    "preview:learn": "vite preview --mode learn --host --port 8090 --strictPort",
+    "check-types": "tsc --noEmit",
+    "test": "node --test",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "phaser": "^4.2.1"
+  },
+  "pnpm": {
+    "_comment": "pnpm 10 及更早读这里；pnpm 11 读 pnpm-workspace.yaml 的 allowBuilds（见那个文件的注释）。两处都写是为了跨版本，但只有 pnpm-workspace.yaml 那份在本项目实测验证过。",
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^7.3.6"
+  },
+  "cogito": {
+    "minCliVersion": "0.1.0"
+  }
+}

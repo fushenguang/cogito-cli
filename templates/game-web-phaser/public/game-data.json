@@ -1,0 +1,51 @@
+{
+  "levels": [
+    {
+      "id": "level-1",
+      "name": "第一关：捡星尘",
+      "backgroundLevel": 1,
+      "playerSpawn": {
+        "x": 480,
+        "y": 396
+      },
+      "initialCoins": [
+        {
+          "x": 160,
+          "y": 120
+        },
+        {
+          "x": 300,
+          "y": 240
+        },
+        {
+          "x": 480,
+          "y": 100
+        },
+        {
+          "x": 660,
+          "y": 240
+        },
+        {
+          "x": 800,
+          "y": 120
+        }
+      ],
+      "initialObstacles": [
+        {
+          "x": 240,
+          "y": 360
+        },
+        {
+          "x": 720,
+          "y": 360
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "playerSpeed": 260,
+    "bulletSpeed": 420,
+    "coinValue": 1,
+    "shootValue": 1
+  }
+}

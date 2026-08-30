@@ -1,0 +1,19 @@
+{
+  "name": "cogito-cli",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "scripts": {
+    "build": "pnpm --filter @cogito.ai/cc build",
+    "check-types": "pnpm -r check-types",
+    "test": "pnpm --filter @cogito.ai/cc test",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "@cogito.ai/tsconfig": "workspace:*",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3"
+  }
+}
