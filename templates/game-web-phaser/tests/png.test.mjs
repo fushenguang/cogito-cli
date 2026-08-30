@@ -67,3 +67,41 @@ test('a zero-size image is judged EMPTY without throwing', () => {
   })
   assert.equal(judged.nonEmpty, false)
 })
+
+// 2026-08-30 (`cogito-cli` extraction): the `maxDominantRatio` void detector.
+// The shape below is the M1 run2 void in miniature: ~90% one dark slate, a
+// thin strip of "floor", nothing else. The OLD defaults (minUniqueColors 2,
+// minVariance 1) judge this world non-empty — that green is exactly how a
+// 87%-single-colour frame shipped as a rendered level (cogito-lib #138).
+
+test('run2 void shape: mostly-one-colour world passes OLD defaults but is caught by maxDominantRatio', () => {
+  const base64 = encodeTestPng(24, 24, (x, y) => (y >= 22 ? [96, 165, 250] : [29, 31, 43]))
+  const decoded = decodePng(base64)
+
+  // old gate: two colours and real variance → judged non-empty (the blind spot)
+  const oldJudged = judgeScreenshotNonEmpty(decoded)
+  assert.equal(oldJudged.nonEmpty, true)
+  assert.ok(oldJudged.dominantRatio >= 0.9, `expected dominant share ~0.9, got ${oldJudged.dominantRatio}`)
+
+  // new ceiling: same frame is a void
+  const judged = judgeScreenshotNonEmpty(decoded, { maxDominantRatio: 0.8 })
+  assert.equal(judged.nonEmpty, false)
+  assert.match(judged.reason ?? '', /dominantRatio=/)
+})
+
+test('a richly drawn world clears a strict ceiling (dominant well under it)', () => {
+  const base64 = encodeTestPng(32, 32, (x, y) => [(x * 8) % 256, (y * 8) % 256, ((x + y) * 4) % 256])
+  const decoded = decodePng(base64)
+  const judged = judgeScreenshotNonEmpty(decoded, { maxDominantRatio: 0.8 })
+
+  assert.equal(judged.nonEmpty, true)
+  assert.ok(judged.dominantRatio < 0.1, `expected gradient dominant share tiny, got ${judged.dominantRatio}`)
+})
+
+test('default thresholds keep maxDominantRatio at Infinity — existing callers see no behavior change', () => {
+  // solid colour: still empty via uniqueColors, reason does NOT mention dominant
+  const decoded = decodePng(encodeTestPng(8, 8, () => [29, 31, 43]))
+  const judged = judgeScreenshotNonEmpty(decoded)
+  assert.equal(judged.nonEmpty, false)
+  assert.doesNotMatch(judged.reason ?? '', /dominantRatio=/)
+})
