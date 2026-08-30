@@ -139,11 +139,19 @@ export function decodePng(base64) {
  * proof the game actually drew anything, so both a unique-colour-count
  * floor AND a pixel-variance floor must be cleared.
  *
+ * 2026-08-30 (`cogito-cli` extraction): `maxDominantRatio` — the share of
+ * the frame owned by its single most common colour. This is the void
+ * detector: platform M1 run2 shipped a "level" that was 87% one dark slate
+ * + one floor strip, 835 unique colours, ~8KB PNG — a world the machine
+ * called rendered and the builder called 「后面的都是错的」. Unique-colour
+ * count alone couldn't express "mostly one colour" (text antialiasing
+ * manufactures hundreds of colours from a two-colour world); this can.
+ *
  * @param {{ width: number, height: number, channels: number, pixels: Buffer }} decoded
- * @param {{ minUniqueColors?: number, minVariance?: number }} [thresholds]
+ * @param {{ minUniqueColors?: number, minVariance?: number, maxDominantRatio?: number }} [thresholds]
  */
 export function judgeScreenshotNonEmpty(decoded, thresholds = {}) {
-  const { minUniqueColors = 2, minVariance = 1 } = thresholds
+  const { minUniqueColors = 2, minVariance = 1, maxDominantRatio = Infinity } = thresholds
   const { width, height, channels, pixels } = decoded
   const totalPixels = width * height
 
@@ -152,11 +160,12 @@ export function judgeScreenshotNonEmpty(decoded, thresholds = {}) {
       nonEmpty: false,
       uniqueColors: 0,
       variance: 0,
+      dominantRatio: 1,
       reason: 'zero-size image (width or height is 0)',
     }
   }
 
-  const colors = new Set()
+  const colors = new Map()
   let sum = 0
   let sumSquares = 0
 
@@ -165,7 +174,8 @@ export function judgeScreenshotNonEmpty(decoded, thresholds = {}) {
     const r = pixels[base]
     const g = pixels[base + 1]
     const b = pixels[base + 2]
-    colors.add((r << 16) | (g << 8) | b)
+    const key = (r << 16) | (g << 8) | b
+    colors.set(key, (colors.get(key) ?? 0) + 1)
 
     // Perceptual luminance as the scalar we measure variance over — cheap
     // and enough to tell "flat colour" from "has visible structure" apart.
@@ -178,13 +188,25 @@ export function judgeScreenshotNonEmpty(decoded, thresholds = {}) {
   const variance = sumSquares / totalPixels - mean * mean
   const uniqueColors = colors.size
 
-  const nonEmpty = uniqueColors >= minUniqueColors && variance >= minVariance
+  let dominantCount = 0
+  for (const count of colors.values()) if (count > dominantCount) dominantCount = count
+  const dominantRatio = dominantCount / totalPixels
+
+  const nonEmpty =
+    uniqueColors >= minUniqueColors &&
+    variance >= minVariance &&
+    dominantRatio <= maxDominantRatio
+  const reasons = []
+  if (uniqueColors < minUniqueColors) reasons.push(`uniqueColors=${uniqueColors} (need >=${minUniqueColors})`)
+  if (variance < minVariance) reasons.push(`variance=${variance.toFixed(3)} (need >=${minVariance})`)
+  if (dominantRatio > maxDominantRatio) {
+    reasons.push(`dominantRatio=${dominantRatio.toFixed(3)} (need <=${maxDominantRatio})`)
+  }
   return {
     nonEmpty,
     uniqueColors,
     variance,
-    reason: nonEmpty
-      ? undefined
-      : `uniqueColors=${uniqueColors} (need >=${minUniqueColors}), variance=${variance.toFixed(3)} (need >=${minVariance})`,
+    dominantRatio,
+    reason: nonEmpty ? undefined : reasons.join(', '),
   }
 }
