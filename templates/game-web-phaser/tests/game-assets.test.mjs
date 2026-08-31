@@ -24,6 +24,7 @@ import {
   applyLevelBackground,
   TITLE_TEXTURE_KEY,
   BGM_AUDIO_KEY,
+  FEEDBACK_AUDIO_KEY,
 } from '../src/game-assets.ts'
 
 const VALID_MANIFEST = {
@@ -37,6 +38,7 @@ const VALID_MANIFEST = {
     guard: { path: 'assets/char/guard.png', description: '第二关的守卫敌人', level: 2 },
   },
   bgm: { path: 'assets/bgm/main.mp3', description: '循环播放的背景音乐' },
+  sfx: { path: 'assets/sfx/feedback.wav', description: '收集金币时的正反馈音效' },
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -48,6 +50,7 @@ test('a fully valid manifest normalizes with its content intact', () => {
   assert.notEqual(assets, null)
   assert.deepEqual(assets.title, VALID_MANIFEST.title)
   assert.deepEqual(assets.bgm, VALID_MANIFEST.bgm)
+  assert.deepEqual(assets.sfx, VALID_MANIFEST.sfx)
   assert.deepEqual(assets.backgrounds.level1, VALID_MANIFEST.backgrounds.level1)
   assert.deepEqual(assets.backgrounds.level2, VALID_MANIFEST.backgrounds.level2)
   assert.deepEqual(assets.characters.player, VALID_MANIFEST.characters.player)
@@ -155,7 +158,7 @@ test('planAssetLoads() of a fully valid manifest queues exactly the described fi
   const tasks = planAssetLoads(assets)
 
   const byKey = Object.fromEntries(tasks.map((t) => [t.key, t]))
-  assert.equal(tasks.length, 6) // title + 2 backgrounds + 2 characters + bgm
+  assert.equal(tasks.length, 7) // title + 2 backgrounds + 2 characters + bgm + sfx
   assert.deepEqual(byKey[TITLE_TEXTURE_KEY], { key: TITLE_TEXTURE_KEY, path: 'assets/title.png', kind: 'image' })
   assert.deepEqual(byKey[backgroundTextureKey(1)], {
     key: backgroundTextureKey(1),
@@ -170,6 +173,37 @@ test('planAssetLoads() of a fully valid manifest queues exactly the described fi
   assert.deepEqual(byKey.player, { key: 'player', path: 'assets/char/player.png', kind: 'image' })
   assert.deepEqual(byKey.guard, { key: 'guard', path: 'assets/char/guard.png', kind: 'image' })
   assert.deepEqual(byKey[BGM_AUDIO_KEY], { key: BGM_AUDIO_KEY, path: 'assets/bgm/main.mp3', kind: 'audio' })
+  assert.deepEqual(byKey[FEEDBACK_AUDIO_KEY], {
+    key: FEEDBACK_AUDIO_KEY,
+    path: 'assets/sfx/feedback.wav',
+    kind: 'audio',
+  })
+})
+
+// sfx is an optional single well-known-key slot, not a bucket — its
+// normalization/load-planning deserves its own edge cases.
+test('a manifest with only sfx populated is valid on its own (feedback sound delivered alone)', () => {
+  const assets = normalizeGameAssets({ sfx: VALID_MANIFEST.sfx })
+  assert.notEqual(assets, null)
+  assert.equal(assets.bgm, undefined)
+  assert.deepEqual(assets.sfx, VALID_MANIFEST.sfx)
+
+  const tasks = planAssetLoads(assets)
+  assert.equal(tasks.length, 1)
+  assert.deepEqual(tasks[0], { key: FEEDBACK_AUDIO_KEY, path: 'assets/sfx/feedback.wav', kind: 'audio' })
+})
+
+test('a malformed sfx entry is dropped per-field, leaving the rest of the manifest intact', () => {
+  const assets = normalizeGameAssets({
+    bgm: VALID_MANIFEST.bgm,
+    sfx: { path: 42, description: 'path is not a string' },
+  })
+  assert.notEqual(assets, null)
+  assert.deepEqual(assets.bgm, VALID_MANIFEST.bgm)
+  assert.equal(assets.sfx, undefined) // dropped, not fatal — same per-field degrade as title/bgm
+
+  const byKey = Object.fromEntries(planAssetLoads(assets).map((t) => [t.key, t]))
+  assert.equal(byKey[FEEDBACK_AUDIO_KEY], undefined) // and never queued
 })
 
 // 🔴 Mutation check (AGENTS.md's brief for this change: "把'清单缺失时退化'

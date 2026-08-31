@@ -18,7 +18,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { judgeAssetUsage, classifyAssetKey, PLAYER_KEY } from '../scripts/lib/asset-usage.mjs'
-import { TITLE_TEXTURE_KEY, BGM_AUDIO_KEY, backgroundTextureKey, PLAYER_CHARACTER_KEY } from '../src/game-assets.ts'
+import {
+  TITLE_TEXTURE_KEY,
+  BGM_AUDIO_KEY,
+  FEEDBACK_AUDIO_KEY,
+  backgroundTextureKey,
+  PLAYER_CHARACTER_KEY,
+} from '../src/game-assets.ts'
 
 function snapshot({ declared = [], loaded = [], usedInScene = [] } = {}) {
   return { declared, loaded, usedInScene }
@@ -157,6 +163,31 @@ test('classifyAssetKey agrees with game-assets.ts\'s real well-known keys', () =
   assert.equal(classifyAssetKey(PLAYER_CHARACTER_KEY, 'image'), 'character')
   // The judge's hand-mirrored reserved key must BE the real constant.
   assert.equal(PLAYER_KEY, PLAYER_CHARACTER_KEY)
+  // The feedback sfx key (2026-08-31) must land in 'other', never 'bgm' —
+  // bgm's "declared => playing" rule is one a one-shot cue can never
+  // satisfy, so miscategorizing it would break every sfx-delivering run.
+  assert.equal(classifyAssetKey(FEEDBACK_AUDIO_KEY, 'audio'), 'other')
+})
+
+// A declared feedback sfx must not turn the gate red — the one-shot cue
+// is never "currently playing" at snapshot time. It rides along reported
+// in 'other' (no in-use judgement of its own until after the platform's
+// M1 reading — see scripts/lib/asset-usage.mjs's header). Two shapes that
+// MUST both pass:
+//   - sfx delivered AND fired during the probes (its key in usedInScene)
+//   - sfx delivered but never fired (a run whose probes collected no coin)
+test('REGRESSION: a declared feedback sfx never fails the gate — with or without a coin collected during the probes', () => {
+  const declared = [{ key: FEEDBACK_AUDIO_KEY, kind: 'audio' }]
+
+  const fired = judgeAssetUsage([
+    snapshot({ declared, loaded: [FEEDBACK_AUDIO_KEY], usedInScene: [FEEDBACK_AUDIO_KEY] }),
+  ])
+  assert.equal(fired.status, 'judged')
+  assert.equal(fired.passed, true)
+
+  const neverFired = judgeAssetUsage([snapshot({ declared, loaded: [FEEDBACK_AUDIO_KEY], usedInScene: [] })])
+  assert.equal(neverFired.status, 'judged')
+  assert.equal(neverFired.passed, true)
 })
 
 // ───────────────────────────────────────────────────────────────────────

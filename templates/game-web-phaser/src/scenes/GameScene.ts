@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { GAME_WIDTH, PLAYFIELD_HEIGHT } from '../config'
 import { registerTrigger } from '../debug/harness'
 import type { GameState } from '../debug/state-jump'
-import { applyLevelBackground, PLAYER_CHARACTER_KEY, BGM_AUDIO_KEY } from '../game-assets'
+import { applyLevelBackground, PLAYER_CHARACTER_KEY, BGM_AUDIO_KEY, FEEDBACK_AUDIO_KEY } from '../game-assets'
 import { getActiveLevel, getGameRules, type GameLevelEntry, type GameRules } from '../game-data'
 
 /**
@@ -409,6 +409,24 @@ export class GameScene extends Phaser.Scene {
   private handleCoinCollected(coin: Phaser.Physics.Arcade.Sprite): void {
     coin.destroy()
     this.addScore(this.rules.coinValue)
+    this.playFeedback()
+  }
+
+  /**
+   * Plays the delivered positive-feedback sound (`assets/sfx/feedback.wav`,
+   * loaded under `FEEDBACK_AUDIO_KEY` by `PreloadScene`). The
+   * `cache.audio.exists()` guard mirrors the bgm consumers: no delivered
+   * file ⇒ collecting is simply silent, never an error, never a fallback
+   * beep — the same "missing asset degrades to nothing" discipline.
+   *
+   * Deliberately NOT the full `!sound.get()` half of bgm's guard: that
+   * exists to keep a *looping* track from stacking on itself, while this
+   * is a one-shot cue whose whole point is firing again on the next coin.
+   */
+  private playFeedback(): void {
+    if (this.cache.audio.exists(FEEDBACK_AUDIO_KEY)) {
+      this.sound.play(FEEDBACK_AUDIO_KEY)
+    }
   }
 
   private handleObstacleHit(): void {
