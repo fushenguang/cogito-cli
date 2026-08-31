@@ -98,8 +98,8 @@ export interface ServeStartResult {
 
 export interface ServeStartOptions {
   dir: string
-  port?: number
-  logFile?: string
+  port?: number | undefined
+  logFile?: string | undefined
   pollTimeoutMs?: number
 }
 
