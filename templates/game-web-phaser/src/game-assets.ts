@@ -13,6 +13,7 @@
  *   public/assets/bg/level<N>.png    per-level background (N starts at 1)
  *   public/assets/char/<slug>.png    a character, already alpha-matted
  *   public/assets/bgm/main.mp3       background music
+ *   public/assets/sfx/feedback.wav   positive-feedback sound effect
  *   public/game-assets.json          the manifest this module parses
  *
  * That directory layout is the platform interface and MUST NOT change.
@@ -77,6 +78,20 @@ export interface GameAssets {
   readonly characters: Readonly<Record<string, GameCharacterEntry>>
   /** Background music (`public/assets/bgm/main.mp3`). Absent = no BGM shipped yet — see `./scenes/StartScene.ts`. */
   readonly bgm?: GameAssetEntry
+  /**
+   * Positive-feedback sound effect (`public/assets/sfx/feedback.wav`),
+   * played by `./scenes/GameScene.ts` when the player collects a coin.
+   * Absent = no feedback sound shipped yet — collecting is silent then,
+   * same "missing asset degrades to nothing" discipline as `bgm`.
+   *
+   * Unlike the keyed `backgrounds`/`characters` buckets, this is a single
+   * well-known-key slot: the manifest entry IS the feedback sound, there
+   * is no per-project choice to make (the platform delivers exactly one
+   * CC0 file here — see the platform's cc0-sfx module). When a future
+   * change adds a second sound function (e.g. a miss/negative cue), that
+   * is a NEW well-known key and a NEW manifest slot — never a list here.
+   */
+  readonly sfx?: GameAssetEntry
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -108,6 +123,14 @@ export const TITLE_TEXTURE_KEY = 'title'
 
 /** Audio key `PreloadScene` registers `assets.bgm`'s file under. */
 export const BGM_AUDIO_KEY = 'bgm'
+
+/**
+ * Audio key `PreloadScene` registers `assets.sfx`'s file under — the
+ * positive-feedback sound (coin collect). Well-known in the same sense as
+ * `BGM_AUDIO_KEY`: the key names the sound's *function*, not a library
+ * slot; consumers check `this.cache.audio.exists(FEEDBACK_AUDIO_KEY)`.
+ */
+export const FEEDBACK_AUDIO_KEY = 'feedback'
 
 /**
  * Convention, not a technical requirement: if a project wants a
@@ -259,14 +282,21 @@ export function normalizeGameAssets(raw: unknown): GameAssets | null {
 
   const title = normalizeAssetEntry(raw['title'])
   const bgm = normalizeAssetEntry(raw['bgm'])
+  const sfx = normalizeAssetEntry(raw['sfx'])
   const backgrounds = normalizeBackgrounds(raw['backgrounds'])
   const characters = normalizeCharacters(raw['characters'])
 
-  if (!title && !bgm && Object.keys(backgrounds).length === 0 && Object.keys(characters).length === 0) {
+  if (
+    !title &&
+    !bgm &&
+    !sfx &&
+    Object.keys(backgrounds).length === 0 &&
+    Object.keys(characters).length === 0
+  ) {
     return null
   }
 
-  return { title, backgrounds, characters, bgm }
+  return { title, backgrounds, characters, bgm, sfx }
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -316,6 +346,10 @@ export function planAssetLoads(assets: GameAssets | null): readonly AssetLoadTas
 
   if (assets.bgm) {
     tasks.push({ key: BGM_AUDIO_KEY, path: assets.bgm.path, kind: 'audio' })
+  }
+
+  if (assets.sfx) {
+    tasks.push({ key: FEEDBACK_AUDIO_KEY, path: assets.sfx.path, kind: 'audio' })
   }
 
   return tasks

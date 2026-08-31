@@ -138,10 +138,15 @@ const BACKGROUND_KEY_PATTERN = /^bg-level[1-9]\d*$/
  * only so `tests/asset-usage.test.mjs` can assert this never drifts from
  * `../../src/game-assets.ts`'s real key-generating functions.
  *
- * `kind` is consulted only as a fallback for a shape today's manifest never
- * actually produces (an audio key that isn't `"bgm"` — there is currently no
- * other way to declare audio at all) so a future manifest shape doesn't
- * silently get miscategorized as a character.
+ * `kind` is consulted only as a fallback, so a shape this classifier
+ * doesn't name explicitly never gets silently miscategorized as a
+ * character. That fallback is now load-bearing for audio: since the
+ * 2026-08-31 feedback-sfx change, a manifest CAN declare a second audio
+ * key (`feedback`), which must land in `'other'` — reported, never held
+ * against `passed` — NOT in `'bgm'`, whose "declared ⇒ playing" rule a
+ * one-shot cue can never satisfy. (Whether `feedback` gets its own
+ * in-use judgement is deliberately deferred until after the platform's
+ * M1 reading; see the platform repo's blade-3 notes.)
  *
  * @param {string} key
  * @param {'image' | 'audio' | undefined} kind
