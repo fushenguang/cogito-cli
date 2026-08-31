@@ -11,15 +11,22 @@
 // Zero new dependencies: node:fs / node:child_process only.
 
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { anchorRunSnapshot, type GitAnchorResult } from './git-anchor.js'
+import { syncBackTuning, type SyncBackResult } from './hot-reload.js'
+import { MANIFEST_FILE, type DeliverResult } from './data-deliver.js'
 
 export interface EvidenceBundle {
   collectedAt: string
   dir: string
   verifyResult: unknown | null
   dataFiles: Record<string, { present: boolean; bytes: number; sha256?: string }>
+  /** Blade 2: tuned spine values synced back into DATA_MODEL/ before anchoring. */
+  tuningSyncBack: SyncBackResult | null
+  /** Blade 2: the `cc data deliver` manifest (.data-deliver.json), when present. */
+  dataDeliver: DeliverResult | null
   /** Blade 1.5: the run-closing anchor (commit-if-dirty + tag) taken BEFORE collecting. */
   gitAnchor: GitAnchorResult | null
   git: { log: string[]; status: string[] } | null
@@ -45,10 +52,20 @@ export function collectEvidence(dir: string, shotStates?: string[]): EvidenceBun
     dir,
     verifyResult: null,
     dataFiles: {},
+    tuningSyncBack: null,
+    dataDeliver: null,
     gitAnchor: null,
     git: null,
     shots: null,
     errors: [],
+  }
+
+  // Blade 2 order matters: sync tuned values back into DATA_MODEL/ (the
+  // canonical design layer) FIRST, so the git anchor below commits the
+  // synced-back canonical rather than the untouched one.
+  bundle.tuningSyncBack = syncBackTuning(dir)
+  if (bundle.tuningSyncBack.error) {
+    bundle.errors.push(`tuning sync-back: ${bundle.tuningSyncBack.error}`)
   }
 
   // Blade 1.5: `cc evidence` is the fixed run-closing step, so it is where
@@ -77,11 +94,23 @@ export function collectEvidence(dir: string, shotStates?: string[]): EvidenceBun
       continue
     }
     const raw = readFileSync(p)
-    bundle.dataFiles[name] = { present: true, bytes: raw.length }
+    bundle.dataFiles[name] = { present: true, bytes: raw.length, sha256: createHash('sha256').update(raw).digest('hex') }
     try {
       JSON.parse(raw.toString('utf8'))
     } catch {
       bundle.errors.push(`public/${name} is not valid JSON`)
+    }
+  }
+
+  // Blade 2: the deliver manifest, when present, is part of the evidence —
+  // its hashes are how the platform records "which data went into this run"
+  // (records, never gates).
+  const manifestPath = join(dir, MANIFEST_FILE)
+  if (existsSync(manifestPath)) {
+    try {
+      bundle.dataDeliver = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    } catch (e) {
+      bundle.errors.push(`${MANIFEST_FILE} unreadable: ${String(e)}`)
     }
   }
 
