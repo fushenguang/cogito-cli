@@ -13,12 +13,15 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { anchorRunSnapshot, type GitAnchorResult } from './git-anchor.js'
 
 export interface EvidenceBundle {
   collectedAt: string
   dir: string
   verifyResult: unknown | null
   dataFiles: Record<string, { present: boolean; bytes: number; sha256?: string }>
+  /** Blade 1.5: the run-closing anchor (commit-if-dirty + tag) taken BEFORE collecting. */
+  gitAnchor: GitAnchorResult | null
   git: { log: string[]; status: string[] } | null
   shots: Array<{ state: string; file: string; bytes: number; exitCode: number | null }> | null
   errors: string[]
@@ -42,9 +45,18 @@ export function collectEvidence(dir: string, shotStates?: string[]): EvidenceBun
     dir,
     verifyResult: null,
     dataFiles: {},
+    gitAnchor: null,
     git: null,
     shots: null,
     errors: [],
+  }
+
+  // Blade 1.5: `cc evidence` is the fixed run-closing step, so it is where
+  // the run's closing state gets anchored (commit-if-dirty + tag) — before
+  // the git fields below are read, so the bundle reports the anchored state.
+  bundle.gitAnchor = anchorRunSnapshot(dir)
+  if (!bundle.gitAnchor.ok) {
+    bundle.errors.push(`git anchor failed: ${bundle.gitAnchor.reason ?? 'unknown'}`)
   }
 
   const vrPath = join(dir, '.verify-result.json')

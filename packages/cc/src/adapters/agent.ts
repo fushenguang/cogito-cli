@@ -1,6 +1,7 @@
 import { join, isAbsolute, resolve } from 'path'
 import { getTemplate } from '../core/registry.js'
 import { scaffoldProject } from '../core/scaffold.js'
+import { anchorAfterScaffold } from '../core/git-anchor.js'
 
 export interface AgentAdapterOptions {
   name: string
@@ -104,5 +105,17 @@ export async function runAgentAdapter(opts: AgentAdapterOptions): Promise<void> 
 
   if (!result.ok) {
     process.exit(1)
+  }
+
+  // Blade 1.5 (git anchor): anchor the fresh scaffold with an initial commit.
+  // Runs after the scaffold result is emitted so a git failure never masks a
+  // successful scaffold — the anchor is observability, not a gate.
+  const anchor = anchorAfterScaffold(targetDir)
+  if (json) {
+    emit({ type: 'git-anchor', dir: targetDir, ...anchor }, true)
+  } else if (!anchor.ok) {
+    console.error(`⚠ git anchor failed: ${anchor.reason ?? 'unknown'} (scaffold itself succeeded)`)
+  } else if (anchor.action === 'initialized') {
+    console.log('✓ git anchor: initial commit created')
   }
 }
