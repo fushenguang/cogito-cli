@@ -1,8 +1,8 @@
 {
   "name": "@cogito.ai/cc",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
-  "description": "Cogito CLI (`cc`) \u2013 game-dev scaffold + fixed pipeline for humans and AI agents (extracted from AgentDock)",
+  "description": "Cogito CLI (`cc`) – game-dev scaffold + fixed pipeline for humans and AI agents (extracted from AgentDock)",
   "publishConfig": {
     "access": "public"
   },
