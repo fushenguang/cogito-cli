@@ -111,9 +111,9 @@ The outer platform can drop AI-generated art/audio into `public/assets/` (`title
 
 **You may edit (content slots):** `public/game-data.json` (levels/rules/vocabulary — rule 9), `public/game-doc.json` (all fixed-page copy + theme colours: `screens`/`theme` sections), `public/game-assets.json` (rule 8 manifest), `assertions.json`, `PROJECT_CONTEXT.md` (your cross-session handoff — update it every meaningful step), `README.md`.
 
-**You may create, under:** `public/**` (new data files + assets), `src/extensions/**` (reserved for project-specific scene/mechanism code — note the template does not auto-load these yet; wiring an extensions entry point is a deliberate template change, ask a human), `docs/**`, `assets/**`.
+**You may create, under:** `public/**` (new data files + assets), `src/extensions/**` (the project-mechanics slot — LOADED, since 2026-09-01: declare `{"extension": {"module": "<name>", "config": {...}}}` on the level in `game-data.json` and export `setup` from `src/extensions/<name>.ts`; contract in `src/extensions-contract.ts`, usage guide in `src/extensions/README.md`. A declared-but-missing module degrades to the vanilla level — your acceptance criteria catch that, the floor never breaks), `docs/**`, `assets/**`.
 
-**Everything else is template-owned and read-only for you** — `src/scenes/*`, `src/screen-dom.ts` (the fixed Start/GameOver/Settings pages), `src/debug/*`, `src/config.ts`, `scripts/*`, `tests/*`, `index.html`, `vite.config.ts`, `package.json`, this AGENTS.md. A WS violation turns `pnpm verify` red with the offending path named. If the slot genuinely cannot express what the game needs (a new mechanic, a new screen), that is a template-contract gap — surface it in your report, don't edit around it.
+**Everything else is template-owned and read-only for you** — `src/scenes/*`, `src/screen-dom.ts` (the fixed Start/GameOver/Settings pages), `src/extensions-contract.ts` (the extension hook's contract — you implement it, you never edit it), `src/debug/*`, `src/config.ts`, `scripts/*`, `tests/*`, `index.html`, `vite.config.ts`, `package.json`, this AGENTS.md. A WS violation turns `pnpm verify` red with the offending path named. If the slot genuinely cannot express what the game needs (a new screen, a change to the interpreter itself), that is a template-contract gap — surface it in your report, don't edit around it.
 
 **首关机通 invariant:** `levels[0]` must stay completable by holding → with periodic jumps (the tutorial's ground path is unobstructed by construction; that is why it ships with `initialObstacles: []` — see `game-doc.json`'s notDoing). `pnpm build:play`'s selfcheck plays level 1 exactly that way through real input, so a level design that breaks machine completion breaks the build. Designing harder traversal into level 1 is changing this invariant deliberately — not a bug you found.
 
@@ -156,6 +156,9 @@ src/
 ├── game-assets.ts       # game-assets.json manifest contract (AI-generated title/bg/char/bgm) — see rule 8
 ├── game-data.ts         # game-data.json contract: validation + accessors + consumption registry — see rule 9
 ├── game-doc.ts          # game-doc.json contract: doc + screens + theme, with total-fallback resolution
+├── extensions-contract.ts # the src/extensions/<module>.ts hook contract (rule 10) — template-owned, you implement it
+├── extensions/          # YOUR mechanics slot (rule 10): setup() modules wired by levels[i].extension in game-data.json
+│   └── README.md        # usage guide + the floors an extension must not break
 ├── debug/
 │   ├── state-jump.ts    # listStates/jump/isValidStart contract + reference impl (Boot/Preload/Start/Game/GameOver)
 │   ├── harness-types.ts # window.__gameHarness contract types — zero imports, see rule 6

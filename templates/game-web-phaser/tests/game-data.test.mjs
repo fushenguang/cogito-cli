@@ -268,3 +268,61 @@ test('re-initializing with different data changes the active level, and stale co
   assert.deepEqual(evidence.declared, [{ id: 'levels:level-2', section: 'levels' }])
   assert.deepEqual(evidence.usedInScene, [{ id: 'levels:level-2', section: 'levels' }])
 })
+
+// ───────────────────────────────────────────────────────────────────────
+// levels[i].extension — the project-mechanics hook (2026-09-01, first
+// consumer: the 小小财迷 v2 reopen). The validation boundary that matters:
+// module charset is the path-traversal guard (the runtime resolves it to
+// src/extensions/<module>.ts inside the bundle), config is shape-only
+// (its fields belong to the extension, never to this schema).
+// ───────────────────────────────────────────────────────────────────────
+
+const LEVEL_WITH_EXTENSION = {
+  id: 'level-1', name: '第一个愿望', backgroundLevel: 1,
+  playerSpawn: { x: 80, y: 400 },
+  platforms: [{ x: 0, y: 436, width: 960, height: 40 }],
+  goal: { x: 910, y: 412 }, initialCoins: [], initialObstacles: [],
+}
+
+test('a level with a well-formed extension declaration validates and round-trips module + config', () => {
+  const manifest = {
+    levels: [{
+      ...LEVEL_WITH_EXTENSION,
+      extension: { module: 'opportunity-window', config: { windowMs: 8000, opportunities: [{ order: 1, x: 400, y: 404 }] } },
+    }],
+  }
+  const parsed = parseAndValidateGameData(JSON.stringify(manifest))
+  assert.equal(parsed.levels[0].extension?.module, 'opportunity-window')
+  assert.deepEqual(parsed.levels[0].extension?.config, { windowMs: 8000, opportunities: [{ order: 1, x: 400, y: 404 }] })
+})
+
+test('extension.module is the path-traversal guard: ../, slashes, dots and spaces all throw', () => {
+  // The runtime resolves module to src/extensions/<module>.ts — anything
+  // outside that directory (or outside the bundle's key format) must die
+  // at validation, never at runtime.
+  for (const module of ['../hack', 'a/b', '..', 'a.ts', 'mod ule', '']) {
+    const broken = { levels: [{ ...LEVEL_WITH_EXTENSION, extension: { module } }] }
+    assert.throws(
+      () => parseAndValidateGameData(JSON.stringify(broken)),
+      /extension\.module/,
+      `module=${JSON.stringify(module)} must be rejected`,
+    )
+  }
+})
+
+test('extension.config must be a plain object when present (arrays/scalars/strings throw)', () => {
+  for (const config of [[1, 2], 42, 'ops', true]) {
+    const broken = { levels: [{ ...LEVEL_WITH_EXTENSION, extension: { module: 'ok-mod', config } }] }
+    assert.throws(() => parseAndValidateGameData(JSON.stringify(broken)), /extension\.config/)
+  }
+})
+
+test('extension itself must be an object, not a bare string', () => {
+  const broken = { levels: [{ ...LEVEL_WITH_EXTENSION, extension: 'opportunity-window' }] }
+  assert.throws(() => parseAndValidateGameData(JSON.stringify(broken)), /extension/)
+})
+
+test('a level without the extension key is unchanged — the hook is strictly optional', () => {
+  const parsed = parseAndValidateGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION] }))
+  assert.equal(parsed.levels[0].extension, undefined)
+})
