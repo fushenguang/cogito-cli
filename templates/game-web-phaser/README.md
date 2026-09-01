@@ -203,6 +203,16 @@ public/assets/bgm/main.mp3       background music
 
 `PreloadScene` queues exactly the files the manifest lists — nothing is ever requested on a guess. Missing manifest, a missing individual file, or no manifest at all (the common case early in a project) all degrade the same way: no exception, no failed-looking load, just the existing procedural placeholder shapes / plain background / no audio, unchanged from this template's zero-asset default. If you're building on this template and want your generated files picked up, write them to the paths above and describe them in `public/game-assets.json` — see `src/game-assets.ts`'s header doc for the exact JSON shape, and `skills/game-flow-and-hud/SKILL.md`'s "Platform-Delivered Assets" section for the reasoning behind the degrade-gracefully contract.
 
+### Custom mechanics — the src/extensions/ slot
+
+Mechanics the template's interpreter doesn't know (timed windows, patrols on data-defined paths, custom counters) live in `src/extensions/`, wired by DATA — declare on the level that needs it:
+
+```json
+"extension": { "module": "opportunity-window", "config": { "windowMs": 8000 } }
+```
+
+…create `src/extensions/opportunity-window.ts` exporting `setup(scene, config)` — it runs at the end of `GameScene.create()` on a fully-built level. The hook is build-time-inlined (`import.meta.glob` eager), so there's no async gap where the level is playable but the mechanic missing; a declared-but-missing module degrades to the vanilla level with a console warning (the floor never breaks — your acceptance criteria catch the missing work). Contract: `src/extensions-contract.ts`; usage guide: `src/extensions/README.md`; boundary: AGENTS.md rule 10.
+
 ### Everything else
 
 Drop image/audio files under `public/assets/` (create the directory) and load them the normal Phaser way in `PreloadScene.preload()`:

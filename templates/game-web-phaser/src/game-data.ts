@@ -126,6 +126,34 @@ export interface GameLevelEntry {
   readonly initialCoins: readonly SpawnPoint[]
   /** Static obstacles the level starts with. May be empty. */
   readonly initialObstacles: readonly SpawnPoint[]
+  /**
+   * Optional project-specific mechanism hook (2026-09-01; first real
+   * consumer: the 小小财迷 v2 reopen). Declaring
+   * `{"module": "opportunity-window", "config": {...}}` makes GameScene load
+   * `src/extensions/opportunity-window.ts` and call its `setup(scene, config)`
+   * after the level is built. `config` is validated shape-only (plain
+   * object) — its fields belong to the extension, not to the schema.
+   *
+   * This is the slot that keeps the write surface honest: mechanics the
+   * template's interpreter doesn't know (timed windows, patrol paths, jar
+   * counters…) are the AI's to build INSIDE `src/extensions/`, wired by
+   * DATA here — never by editing template-owned scene code.
+   */
+  readonly extension?: LevelExtension
+}
+
+/**
+ * A level's extension declaration. `module` must match `/^[A-Za-z0-9-]+$/` —
+ * the strict charset is a path-traversal guard: the runtime resolves it to
+ * `../extensions/<module>.ts` inside the bundle, so `../foo` or `a/b` must
+ * never pass validation. A module name that passes validation but has no
+ * matching file degrades at runtime to the vanilla level (floor stays
+ * intact) with a console warning — the missing-implementation case is
+ * surfaced by the project's acceptance criteria, not by the loader.
+ */
+export interface LevelExtension {
+  readonly module: string
+  readonly config?: Readonly<Record<string, unknown>>
 }
 
 /**
@@ -207,6 +235,7 @@ function readLevelEntry(value: unknown, index: number): GameLevelEntry {
   const playerSpawn = readPlayfieldPoint(value['playerSpawn'], `${path}.playerSpawn`)
   const platforms = readPlatformList(value['platforms'], `${path}.platforms`)
   const goal = readPlayfieldPoint(value['goal'], `${path}.goal`)
+  const extension = readLevelExtension(value['extension'], path)
   return {
     id,
     name,
@@ -216,7 +245,23 @@ function readLevelEntry(value: unknown, index: number): GameLevelEntry {
     goal,
     initialCoins: readPlacementList(value['initialCoins'], `${path}.initialCoins`),
     initialObstacles: readPlacementList(value['initialObstacles'], `${path}.initialObstacles`),
+    ...(extension !== undefined ? { extension } : {}),
   }
+}
+
+/** Validates a level's optional extension declaration. Strict charset = path-traversal guard (see LevelExtension). */
+function readLevelExtension(value: unknown, path: string): LevelExtension | undefined {
+  if (value === undefined) return undefined
+  if (!isPlainObject(value)) validationError(`${path}.extension`, `必须是 { "module": string, "config"?: object } 对象，实际是 ${JSON.stringify(value)}`)
+  const module = value['module']
+  if (typeof module !== 'string' || !/^[A-Za-z0-9-]+$/.test(module)) {
+    validationError(`${path}.extension.module`, `必须是匹配 /^[A-Za-z0-9-]+$/ 的模块名（对应 src/extensions/<module>.ts；字符集同时防路径穿越），实际是 ${JSON.stringify(module)}`)
+  }
+  const config = value['config']
+  if (config !== undefined && !isPlainObject(config)) {
+    validationError(`${path}.extension.config`, `必须是对象（字段由扩展自己解释），实际是 ${JSON.stringify(config)}`)
+  }
+  return { module, ...(config !== undefined ? { config: config as Readonly<Record<string, unknown>> } : {}) }
 }
 
 /** Validates one {x, y, width, height} platform rect to the playfield contract (top-left + size semantics). */

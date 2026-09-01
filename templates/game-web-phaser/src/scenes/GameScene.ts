@@ -254,6 +254,14 @@ export class GameScene extends Phaser.Scene {
       this.registry.set('highScore', 0)
     }
 
+    // Project-specific mechanism hook (2026-09-01; first real consumer:
+    // the 小小财迷 v2 reopen's opportunity-window). The ACTIVE level may
+    // declare `extension: { module, config }` in game-data.json — see
+    // applyLevelExtension() below for the loading contract. Runs AFTER
+    // geometry/registry/triggers and BEFORE UiScene launches, so the
+    // extension builds on a complete level.
+    this.applyLevelExtension()
+
     // HUD (score text + instructions + doc-panel entry) lives in UiScene,
     // launched in parallel with this scene — see the class doc and
     // dimensions.ts's HUD band / playfield contract. `launch()` is a no-op
@@ -265,6 +273,41 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scene.stop('UI')
     })
+  }
+
+  /**
+   * Wire the active level's `extension` declaration (`levels[i].extension`
+   * in game-data.json — validated there: `module` matches
+   * `/^[A-Za-z0-9-]+$/`, which is also the path-traversal guard) to its
+   * module under `src/extensions/` (the AI write surface, AGENTS.md rule
+   * 10; the hook contract lives in `src/extensions-contract.ts`).
+   *
+   * `import.meta.glob(..., { eager: true })` is resolved at BUILD time —
+   * vite inlines every `src/extensions/*.ts` into the bundle (an empty
+   * directory contributes nothing), so the lookup is a plain object read,
+   * not a runtime import: no async timing window where the level is
+   * playable but the mechanic missing.
+   *
+   * A declared module with no matching file, or one that doesn't export
+   * `setup`, degrades to the vanilla level with a console warning — the
+   * FLOOR is never held hostage by the ceiling. That missing-implementation
+   * case is the project's acceptance criteria's job to catch (the machine
+   * judge for the mechanic goes red), not the loader's job to guess at.
+   */
+  private applyLevelExtension(): void {
+    const extension = this.level.extension
+    if (!extension) return
+    const modules = import.meta.glob<{
+      setup?: (scene: GameScene, config: Readonly<Record<string, unknown>> | undefined) => void
+    }>('../extensions/*.ts', { eager: true })
+    const entry = modules[`../extensions/${extension.module}.ts`]
+    if (!entry || typeof entry.setup !== 'function') {
+      console.warn(
+        `[extension] level "${this.level.id}" declares module "${extension.module}" but src/extensions/${extension.module}.ts does not export setup — playing the vanilla level (check AGENTS.md rule 10)`,
+      )
+      return
+    }
+    entry.setup(this, extension.config)
   }
 
   /**
