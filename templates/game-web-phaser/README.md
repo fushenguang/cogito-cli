@@ -67,7 +67,7 @@ pnpm dev
 
 Open [http://localhost:8080](http://localhost:8080). The port is fixed at `8080` (see `vite.config.ts`) — the platform hosting this project builds share/preview links against that exact port, so don't change it.
 
-Out of the box — before you change anything — the game is **already playable end-to-end**: title page → click start → tutorial platformer level (walk right, reach the goal flag) → ending page → restart / back to title. Your job is to turn that tutorial data into a real game (levels, copy, assets) inside the AI write surface — see `AGENTS.md` rule 10 and the "Factory state" section of `PROJECT_CONTEXT.md`.
+Out of the box — before you change anything — the game is **already playable end-to-end**: title page → click start → tutorial platformer level (walk right, reach the goal flag) → ending page → restart / back to title. Add entries to `game-data.json`'s `levels` and reaching a goal advances to the next level (the last one's goal ends the run) — progression is data, not scene code. Your job is to turn that tutorial data into a real game (levels, copy, assets) inside the AI write surface — see `AGENTS.md` rule 10 and the "Factory state" section of `PROJECT_CONTEXT.md`.
 
 > Running as an autonomous agent? Start this in the **background**, never in the foreground — see rule 1 in `AGENTS.md`.
 

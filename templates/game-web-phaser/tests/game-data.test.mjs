@@ -18,6 +18,8 @@ import {
   isGameDataInitialized,
   getActiveLevel,
   getLevelById,
+  getLevelByIndex,
+  getLevelCount,
   getGameRules,
   getVocabulary,
   getConsumedEntries,
@@ -44,6 +46,21 @@ const VALID_MANIFEST_TEXT = JSON.stringify({
   ],
   rules: { playerSpeed: 260, jumpVelocity: 500, gravityY: 1000, coinValue: 1 },
 })
+
+// Two-level manifest — the multi-level flow (0.9.0) shape: levels[1..] is
+// now reachable via getLevelByIndex, which is what makes it count as
+// consumed in the evidence layer.
+const SECOND_LEVEL = {
+  id: 'level-2',
+  name: '第二关',
+  backgroundLevel: 2,
+  playerSpawn: { x: 100, y: 396 },
+  platforms: [{ x: 0, y: 436, width: 960, height: 40 }],
+  goal: { x: 860, y: 412 },
+  initialCoins: [],
+  initialObstacles: [],
+}
+const TWO_LEVEL_TEXT = JSON.stringify({ levels: [JSON.parse(VALID_MANIFEST_TEXT).levels[0], SECOND_LEVEL], rules: JSON.parse(VALID_MANIFEST_TEXT).rules })
 
 // GAME_WIDTH=960, PLAYFIELD_HEIGHT=476 (src/dimensions.ts).
 const PLAYFIELD_HEIGHT = 540 - 64
@@ -176,6 +193,26 @@ test('getLevelById consumes on hit and returns null (consuming nothing) on miss'
   assert.deepEqual(getConsumedEntries(), [])
   assert.equal(getLevelById('level-1').id, 'level-1')
   assert.deepEqual(getConsumedEntries(), [{ id: 'levels:level-1', section: 'levels' }])
+})
+
+test('getLevelByIndex reaches levels[1..] (multi-level flow) and records consumption on hit only', () => {
+  initGameData(TWO_LEVEL_TEXT)
+  assert.equal(getLevelCount(), 2)
+  assert.equal(getLevelByIndex(1).id, 'level-2')
+  // Before 0.9.0, levels[1] had NO consumer at all — that is exactly the
+  // evidence gap this accessor closes, so the consumption side is the
+  // assertion, not an afterthought.
+  assert.deepEqual(getConsumedEntries(), [{ id: 'levels:level-2', section: 'levels' }])
+  // Miss consumes nothing and hands back null — the caller owns the branch.
+  assert.equal(getLevelByIndex(2), null)
+  assert.equal(getLevelByIndex(-1), null)
+  assert.deepEqual(getConsumedEntries(), [{ id: 'levels:level-2', section: 'levels' }])
+})
+
+test('getLevelCount has no consumption side effect — the branch check itself is free', () => {
+  initGameData(VALID_MANIFEST_TEXT)
+  assert.equal(getLevelCount(), 1)
+  assert.deepEqual(getConsumedEntries(), [])
 })
 
 test('getVocabulary consumes every key it hands out', () => {

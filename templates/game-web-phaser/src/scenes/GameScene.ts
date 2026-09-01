@@ -3,7 +3,7 @@ import { GAME_WIDTH, PLAYFIELD_HEIGHT } from '../config'
 import { registerTrigger } from '../debug/harness'
 import type { GameState } from '../debug/state-jump'
 import { applyLevelBackground, PLAYER_CHARACTER_KEY, BGM_AUDIO_KEY, FEEDBACK_AUDIO_KEY } from '../game-assets'
-import { getActiveLevel, getGameRules, getPersistValueNames, type GameLevelEntry, type GameRules } from '../game-data'
+import { getGameRules, getLevelByIndex, getLevelCount, getPersistValueNames, type GameLevelEntry, type GameRules } from '../game-data'
 
 /**
  * Game — the actual playable scene: a single-screen PLATFORMER tutorial
@@ -77,6 +77,8 @@ export class GameScene extends Phaser.Scene {
    * content constants in this class — no hardcoded spawn point, speeds,
    * placements or level number.
    */
+  /** 0-based index into `levels` — which level THIS scene instance plays. */
+  private levelIndex = 0
   private level!: GameLevelEntry
   private rules!: GameRules
 
@@ -127,14 +129,29 @@ export class GameScene extends Phaser.Scene {
     this.jumpKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE)
     // No addCapture() for R — unlike Space/arrows, a bare "r" keypress has
     // no competing browser default to fight (see class doc rule 2).
-    keyboard.on('keydown-R', () => this.scene.restart())
+    keyboard.on('keydown-R', () => this.scene.restart({ levelIndex: this.levelIndex }))
 
     // ── Data layer — the whole level's content comes from here ─────────
     // `public/game-data.json`, validated at Preload-time. Taking entries
     // through the accessors is also what fills the harness's
     // `data.usedInScene` evidence. A new level/rule is a data edit, not a
     // scene edit (AGENTS.md rule 9).
-    this.level = getActiveLevel()
+    this.levelIndex = resolveLevelIndex(this.scene.settings.data)
+    const level = getLevelByIndex(this.levelIndex)
+    // Out-of-range index means malformed restart/start data reached us —
+    // fail loud, never silently fall back to levels[0] (a wrong level that
+    // LOOKS playable is worse than an error).
+    if (!level) {
+      throw new Error(
+        `GameScene: no levels[${this.levelIndex}] in the manifest — restart/start data carried an out-of-range levelIndex`,
+      )
+    }
+    this.level = level
+    // Machine-visible "which level is live" — the harness snapshot's
+    // `levelId` field (and thus selfcheck SC-6's advance detection) reads
+    // exactly this registry key. Not a persistValue: it is scene state,
+    // overwritten on every level start by design.
+    this.registry.set('levelId', this.level.id)
     this.rules = getGameRules()
 
     // Gravity is a RULE (content), not engine config — the platformer's
@@ -462,6 +479,37 @@ export class GameScene extends Phaser.Scene {
    * whole chain toward (真实点击开始 → 走到终点 → 过关).
    */
   private handleGoalReached(): void {
+    // Multi-level flow (0.9.0): clearing a level that has a successor
+    // advances via a Game restart carrying the next index — the whole
+    // progression is data-driven, no scene edits. `score` re-zeroes on the
+    // advance (per-level value, same contract as an R restart); anything
+    // that must survive it lives in `persistValues` (0.8.0), whose
+    // has-once initialization deliberately skips re-zeroing here.
+    const next = this.levelIndex + 1
+    if (next < getLevelCount()) {
+      this.scene.restart({ levelIndex: next })
+      return
+    }
     this.scene.start('GameOver', { score: this.score, cleared: true })
   }
+}
+
+/**
+ * Reads the 0-based `levelIndex` out of scene start/restart data
+ * (`this.scene.settings.data`). Absent data (first `start('Game')`, the
+ * GameOver retry button) means level 0 — the shipped scaffold's
+ * single-level behavior, unchanged. A present-but-malformed value throws:
+ * this only ever comes from our own `restart({ levelIndex })` calls, so
+ * anything else is a programming error, not content.
+ */
+function resolveLevelIndex(data: unknown): number {
+  if (typeof data !== 'object' || data === null) return 0
+  const raw = (data as { levelIndex?: unknown }).levelIndex
+  if (raw === undefined) return 0
+  // typeof narrows, Number.isInteger guards — both, so `return raw` below
+  // lands as `number` without a cast.
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 0) {
+    throw new Error(`GameScene received a malformed levelIndex: ${String(raw)}`)
+  }
+  return raw
 }

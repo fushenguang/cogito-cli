@@ -52,7 +52,10 @@ test('GameScene has no per-level content constants — it is an interpreter, not
   }
   // And the scene must actually be wired to the data layer.
   assert.match(source, /from '\.\.\/game-data'/)
-  assert.match(source, /getActiveLevel\(\)/)
+  // 0.9.0: the call site is index-aware — `getLevelByIndex(this.levelIndex)`
+  // (multi-level flow) — but the invariant is unchanged: level content
+  // reaches the scene through accessors, never as literals.
+  assert.match(source, /getLevelByIndex\(this\.levelIndex\)/)
   assert.match(source, /this\.rules\.playerSpeed/)
   assert.match(source, /this\.level\.playerSpawn/)
   assert.match(source, /this\.level\.initialCoins/)

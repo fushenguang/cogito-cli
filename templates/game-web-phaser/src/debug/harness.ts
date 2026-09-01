@@ -445,6 +445,11 @@ function buildSnapshot(game: Phaser.Game): HarnessSnapshot {
   const scene = activeGameplayScene(game)
   return {
     stateId: scene?.scene.key ?? '',
+    // `levelId` stays set across the Game→GameOver switch (registry
+    // lifetime = game lifetime), so a GameOver snapshot reports which
+    // level the player just finished — that is the useful reading, not a
+    // stale one.
+    levelId: (game.registry.get('levelId') as string | undefined) ?? null,
     score: readScore(game),
     entities: collectEntities(scene),
     hudTexts: collectHudTexts(game, scene),
@@ -535,6 +540,26 @@ async function applyState(game: Phaser.Game, id: string, seed?: number): Promise
 
   const targetScene = game.scene.getScene(id)
   if (!targetScene) return false // scene key not registered in this build — nothing to switch to
+
+  // 🔴 Stop every OTHER running state scene before starting the target.
+  // Phaser's global `SceneManager.start()` does NOT shut the current state
+  // scene down (only the scene-local `this.scene.start()` does — which is
+  // why the real win/lose paths never showed this bug). Left running, the
+  // source state scene makes `activeGameplayScene()` — "first running
+  // scene whose key is a state id" — keep resolving to whichever scene
+  // registered first, so `stateId` reads as the state we just LEFT, not
+  // the one we jumped to. "After applyState(id) the state IS id" is this
+  // function's whole contract, so the fix lives here rather than in any
+  // caller. First exposed by selfcheck SC-7's multi-level branch (a
+  // Game→GameOver jump, 0.9.0); every earlier assertion jumped INTO
+  // Game/Start from a scene the real game had already moved on from.
+  // UiScene and other overlays (not in listStates()) are deliberately
+  // untouched — they are not states.
+  for (const other of game.scene.getScenes(true)) {
+    if (other.scene.key !== id && isKnownStateId(other.scene.key)) {
+      game.scene.stop(other.scene.key)
+    }
+  }
 
   await new Promise<void>((resolve) => {
     // Attach the listener before calling `start()`: `Scenes.Events.CREATE`

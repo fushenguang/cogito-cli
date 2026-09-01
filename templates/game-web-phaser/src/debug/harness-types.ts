@@ -180,6 +180,16 @@ export interface DataUsageSnapshot {
  */
 export interface HarnessSnapshot {
   readonly stateId: string
+  /**
+   * Id of the LIVE level (manifest `levels[i].id`), or `null` while no
+   * GameScene has run yet (Boot/Preload/Start). Multi-level flow (0.9.0):
+   * selfcheck SC-6 detects a level ADVANCE through this field changing,
+   * and project assertions can pin "which level is this snapshot from"
+   * without inferring it from geometry. Registry-backed
+   * (`GameScene.create` sets `levelId` every level start), so it follows
+   * the same lifecycle as `score` — scene state, not a persistValue.
+   */
+  readonly levelId: string | null
   readonly score: number | null
   readonly entities: readonly EntitySnapshot[]
   readonly hudTexts: readonly string[]
