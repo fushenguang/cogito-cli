@@ -38,9 +38,14 @@
 //   node scripts/playtest.mjs --state Level3
 //   node scripts/playtest.mjs --state Level3 --press ArrowRight,Space --ms 800
 //   node scripts/playtest.mjs --trigger goal_reached
+//   node scripts/playtest.mjs --state Game --replay 3
 //
 // Options:
 //   --state <id>     state to jump to (default: last state whose role is 'gameplay')
+//   --replay <n>     applyState the SAME state n times (default: 1), printing
+//                    values each round — the exact reproduction for a red
+//                    `value_persists`: a value that re-zeroes on a scene
+//                    restart shows as a DIFFERENT value between rounds
 //   --press <keys>   comma-separated keys to press, in order (default: none)
 //   --ms <n>         how long each key is held, in ms (default: 600)
 //   --settle <n>     how long to wait after a state jump / key press (default: 400)
@@ -92,8 +97,7 @@ export function parseArgs(argv) {
     settleMs: DEFAULT_SETTLE_MS,
     trigger: null,
     shot: '.playtest-screenshot.png',
-    seed: 1,
-  }
+    seed: 1, replay: 1 }
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i]
     const value = argv[i + 1]
@@ -104,6 +108,7 @@ export function parseArgs(argv) {
     else if (flag === '--trigger' && value) { opts.trigger = value; i += 1 }
     else if (flag === '--shot' && value) { opts.shot = value; i += 1 }
     else if (flag === '--seed' && value) { opts.seed = Number(value); i += 1 }
+    else if (flag === '--replay' && value) { opts.replay = Number(value); i += 1 }
   }
   return opts
 }
@@ -212,23 +217,40 @@ async function main() {
       return
     }
 
-    const applied = await evalIn(
-      `window.__gameHarness.applyState(${JSON.stringify(targetState)}, ${opts.seed})`,
-    )
-    // See DEFAULT_SETTLE_MS's doc: applyState resolves before the scene is live.
-    await evalIn(`new Promise((r) => setTimeout(() => r(1), ${opts.settleMs}))`)
-    const snapshotAfterJump = JSON.parse(await evalIn('JSON.stringify(window.__gameHarness.getSnapshot())'))
+    let snapshotAfterJump = null
+    const rounds = Math.max(1, Number.isFinite(opts.replay) ? opts.replay : 1)
+    for (let round = 1; round <= rounds; round++) {
+      const applied = await evalIn(
+        `window.__gameHarness.applyState(${JSON.stringify(targetState)}, ${opts.seed})`,
+      )
+      // See DEFAULT_SETTLE_MS's doc: applyState resolves before the scene is live.
+      await evalIn(`new Promise((r) => setTimeout(() => r(1), ${opts.settleMs}))`)
+      snapshotAfterJump = JSON.parse(await evalIn('JSON.stringify(window.__gameHarness.getSnapshot())'))
 
-    console.log(`\napplyState(${JSON.stringify(targetState)}, ${opts.seed}) -> ${applied}`)
-    console.log(`  stateId after ${opts.settleMs}ms : ${snapshotAfterJump.stateId}`)
-    if (snapshotAfterJump.stateId !== targetState) {
-      // Factual mismatch, stated as a mismatch — not "the jump failed".
-      console.log(`  (requested "${targetState}", reading "${snapshotAfterJump.stateId}")`)
+      console.log(`\napplyState(${JSON.stringify(targetState)}, ${opts.seed}) round ${round}/${rounds} -> ${applied}`)
+      console.log(`  stateId after ${opts.settleMs}ms : ${snapshotAfterJump.stateId}`)
+      if (snapshotAfterJump.stateId !== targetState) {
+        // Factual mismatch, stated as a mismatch — not "the jump failed".
+        console.log(`  (requested "${targetState}", reading "${snapshotAfterJump.stateId}")`)
+      }
+      console.log(`  score          : ${snapshotAfterJump.score}`)
+      console.log(`  values         : ${JSON.stringify(snapshotAfterJump.values)}`)
+      if (rounds > 1) {
+        // With --replay, values are the whole point (see usage: a value that
+        // re-zeroes on restart shows as a different value between rounds) —
+        // hudTexts/worldBounds/entities are round-invariant noise, printed on
+        // the first round only.
+        if (round === 1) {
+          console.log(`  hudTexts       : ${JSON.stringify(snapshotAfterJump.hudTexts)}`)
+          console.log(`  worldBounds    : ${JSON.stringify(snapshotAfterJump.worldBounds)}`)
+          console.log(`  entities       : ${JSON.stringify(snapshotAfterJump.entities)}`)
+        }
+      } else {
+        console.log(`  hudTexts       : ${JSON.stringify(snapshotAfterJump.hudTexts)}`)
+        console.log(`  worldBounds    : ${JSON.stringify(snapshotAfterJump.worldBounds)}`)
+        console.log(`  entities       : ${JSON.stringify(snapshotAfterJump.entities)}`)
+      }
     }
-    console.log(`  score          : ${snapshotAfterJump.score}`)
-    console.log(`  hudTexts       : ${JSON.stringify(snapshotAfterJump.hudTexts)}`)
-    console.log(`  worldBounds    : ${JSON.stringify(snapshotAfterJump.worldBounds)}`)
-    console.log(`  entities       : ${JSON.stringify(snapshotAfterJump.entities)}`)
 
     let previous = snapshotAfterJump
     for (const key of opts.press) {

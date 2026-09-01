@@ -3,7 +3,7 @@ import { GAME_WIDTH, PLAYFIELD_HEIGHT } from '../config'
 import { registerTrigger } from '../debug/harness'
 import type { GameState } from '../debug/state-jump'
 import { applyLevelBackground, PLAYER_CHARACTER_KEY, BGM_AUDIO_KEY, FEEDBACK_AUDIO_KEY } from '../game-assets'
-import { getActiveLevel, getGameRules, type GameLevelEntry, type GameRules } from '../game-data'
+import { getActiveLevel, getGameRules, getPersistValueNames, type GameLevelEntry, type GameRules } from '../game-data'
 
 /**
  * Game — the actual playable scene: a single-screen PLATFORMER tutorial
@@ -252,6 +252,17 @@ export class GameScene extends Phaser.Scene {
     // "跨状态不重置" (`value_persists`) means.
     if (!this.registry.has('highScore')) {
       this.registry.set('highScore', 0)
+    }
+
+    // Data-declared persist values (game-data.json top-level `persistValues`)
+    // get the exact same has-once treatment as `highScore` above: initialized
+    // on the first `create()` only, so restarts/state jumps never re-zero
+    // them. This is the mechanical half of what `value_persists` judges; the
+    // observable half is `harness.ts`'s `readValues()`.
+    for (const name of getPersistValueNames()) {
+      if (!this.registry.has(name)) {
+        this.registry.set(name, 0)
+      }
     }
 
     // Project-specific mechanism hook (2026-09-01; first real consumer:
