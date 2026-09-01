@@ -25,6 +25,11 @@ The AI executor's job is the fun ceiling — levels, copy, assets, rules — ins
 
 ```
 cc init       Scaffold a new Cogito project (template + git anchor: root commit "cc init: scaffold")
+cc upgrade    Move a scaffolded project onto the template version this CLI ships: replaces
+              template-owned files the project never touched, reports project-edited ones as
+              conflicts (--force to overwrite), re-runs the {{PROJECT_NAME}} substitution, and
+              lands one "cc upgrade: template <ver>" commit that the write-surface gate
+              re-baselines onto — `pnpm verify` stays green across upgrades
 cc serve      Artifact preview lifecycle: start (reclaim port 8080 by exact PID, verify ANY bind,
               hot-reload watcher) / stop / watch
 cc evidence   Collect the standard evidence bundle: verify-result, data files, git state,

@@ -6,6 +6,7 @@ import { serveCommand } from './commands/serve.js'
 import { evidenceCommand } from './commands/evidence.js'
 import { dataCommand } from './commands/data.js'
 import { skillCommand } from './commands/skill/index.js'
+import { upgradeCommand } from './commands/upgrade.js'
 import { VERSION } from './version.js'
 
 export const main = defineCommand({
@@ -22,5 +23,6 @@ export const main = defineCommand({
     evidence: evidenceCommand,
     data: dataCommand,
     skill: skillCommand,
+    upgrade: upgradeCommand,
   },
 })
