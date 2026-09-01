@@ -23,6 +23,7 @@ import {
   getConsumedEntries,
   listDeclaredEntries,
   buildDataUsageEvidence,
+  getPersistValueNames,
   __resetGameDataForTests,
 } from '../src/game-data.ts'
 
@@ -325,4 +326,58 @@ test('extension itself must be an object, not a bare string', () => {
 test('a level without the extension key is unchanged — the hook is strictly optional', () => {
   const parsed = parseAndValidateGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION] }))
   assert.equal(parsed.levels[0].extension, undefined)
+})
+
+// ───────────────────────────────────────────────────────────────────────
+// persistValues — the data-declared "survives restarts" registry keys
+// (GameScene gives them highScore's has-once init; harness's readValues
+// reports them — that pair is what makes value_persists able to see a
+// project's own persistent value at all).
+// ───────────────────────────────────────────────────────────────────────
+
+test('a well-formed persistValues declaration validates and round-trips', () => {
+  const parsed = parseAndValidateGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION], persistValues: ['jar', 'chapterProgress'] }))
+  assert.deepEqual(parsed.persistValues, ['jar', 'chapterProgress'])
+})
+
+test('persistValues rejects non-arrays and non-identifier entries', () => {
+  for (const broken of ['jar', 42, { jar: true }]) {
+    assert.throws(
+      () => parseAndValidateGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION], persistValues: broken })),
+      /persistValues/,
+    )
+  }
+  for (const name of ['1jar', 'my-jar', 'my jar', '', '罐']) {
+    assert.throws(
+      () => parseAndValidateGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION], persistValues: [name] })),
+      /persistValues\[0\]/,
+      `name=${JSON.stringify(name)} must be rejected`,
+    )
+  }
+})
+
+test('persistValues rejects the reserved names score and highScore, and duplicates', () => {
+  // score is re-zeroed every create() and highScore belongs to the reference
+  // scene — declaring either would promise a persistence it does not have.
+  for (const name of ['score', 'highScore']) {
+    assert.throws(
+      () => parseAndValidateGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION], persistValues: [name] })),
+      new RegExp(`"${name}" 是模板保留名`),
+    )
+  }
+  assert.throws(
+    () => parseAndValidateGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION], persistValues: ['jar', 'jar'] })),
+    /重复声明/,
+  )
+})
+
+test('getPersistValueNames: declared names after init, [] before init and when absent', () => {
+  // Lenient by contract — the harness reads this on Boot/Preload where the
+  // manifest may not be initialized yet; absence must read as [], not throw.
+  assert.deepEqual(getPersistValueNames(), [])
+  initGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION] }))
+  assert.deepEqual(getPersistValueNames(), [])
+  __resetGameDataForTests()
+  initGameData(JSON.stringify({ levels: [LEVEL_WITH_EXTENSION], persistValues: ['jar'] }))
+  assert.deepEqual(getPersistValueNames(), ['jar'])
 })

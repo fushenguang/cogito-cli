@@ -11,7 +11,7 @@ import type {
 } from './harness-types'
 import { jump, isValidStart, listStates as listStateIds, type StateId, type GameState } from './state-jump'
 import { normalizeGameAssets, planAssetLoads, safeParseJson, GAME_ASSETS_RAW_CACHE_KEY } from '../game-assets'
-import { buildDataUsageEvidence, GAME_DATA_RAW_CACHE_KEY } from '../game-data'
+import { buildDataUsageEvidence, GAME_DATA_RAW_CACHE_KEY, getPersistValueNames } from '../game-data'
 import { collectScreenTexts } from '../screen-dom'
 
 /**
@@ -317,11 +317,24 @@ function readValues(game: Phaser.Game): Readonly<Record<string, number>> {
   // value" mistake `readScore()`'s own `has()` check already avoids for
   // `score`.
   //
+  // `persistValues` (game-data.json's top-level declaration, 2026-09-01) is
+  // the data-declared sibling: each named key gets `highScore`'s exact
+  // has-once treatment in GameScene's `create()` and is reported here the
+  // same way — `has()`, never synthesized. Before that field existed this
+  // function was hardcoded to `highScore` only, so a project declaring any
+  // other persistent value (小小财迷's `jar`, say) had NO observable
+  // channel and `value_persists` could only ever report unmet-precondition.
+  //
   // This is still a pure read — nothing here writes to the registry, that
   // only happens in GameScene.ts. Adding a value here does not add a setter
   // to GameHarness (design D3's allow/forbid table is about the harness's
   // public methods, not about how many keys `values` happens to have).
-  return game.registry.has('highScore') ? { highScore: game.registry.get('highScore') as number } : {}
+  const values: Record<string, number> = {}
+  if (game.registry.has('highScore')) values['highScore'] = game.registry.get('highScore') as number
+  for (const name of getPersistValueNames()) {
+    if (game.registry.has(name)) values[name] = game.registry.get(name) as number
+  }
+  return values
 }
 
 /**

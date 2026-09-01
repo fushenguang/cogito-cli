@@ -47,6 +47,23 @@ export const setup: GameExtensionModule['setup'] = (scene, config) => {
 The full contract (call timing, floor-preservation duties) is documented in
 `src/extensions-contract.ts` — read it before writing your first module.
 
+## Two harness channels your module will likely need
+
+- **Machine-visible triggers** — `score_feedback(condition)` /
+  `game_over_trigger(condition)` assertions judge by firing a NAMED trigger.
+  Register yours: `import { registerTrigger } from '../debug/harness'` then
+  `registerTrigger('catch-opportunity', () => { ... })`. The handler may only
+  place/remove/toggle world objects — never move `player` (the harness's
+  trigger-integrity check rejects a handler that does).
+- **Values that survive restarts** — a counter that must NOT re-zero on
+  level restart / state jump (accumulating across levels, say) goes in the
+  registry under a name you declare ONCE in `game-data.json`'s top-level
+  `"persistValues": ["jar"]`. Declared names get `highScore`'s exact
+  has-once initialization in `GameScene.create()` (restarts never re-zero)
+  and are reported by the harness's snapshot `values` — which is what the
+  `value_persists` assertion reads. Reserved: `score` (re-zeroed by
+  design) and `highScore` (template-owned).
+
 ## Floors you must not break
 
 - `pnpm build:play`'s postbuild selfcheck plays level 1 with real input

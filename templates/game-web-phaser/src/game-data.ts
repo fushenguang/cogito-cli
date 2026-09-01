@@ -33,6 +33,9 @@
  *              lists (the "用话造关" family). The reference game has none;
  *              the section exists so those games don't invent their own
  *              convention.
+ *   persistValues optional — names of registry values that must survive
+ *              scene restarts / state jumps (e.g. a counter accumulating
+ *              across levels). See `GameDataManifest.persistValues`.
  *
  * 🔴 Unlike `./game-assets.ts`'s per-field degrade, this contract is
  * STRICT: a manifest that parses but has nothing consumable (empty
@@ -186,6 +189,26 @@ export interface GameDataManifest {
   readonly levels: readonly GameLevelEntry[]
   readonly rules?: GameRules
   readonly vocabulary?: Readonly<Record<string, unknown>>
+  /**
+   * Names of registry values the game declares as "persists across scene
+   * restarts / state jumps" — the data-declared sibling of the reference
+   * `highScore` (e.g. 小小财迷's `jar` counter that accumulates across
+   * levels). Two mechanical effects, both in template-owned code:
+   *
+   *   - `GameScene.create()` initializes each named key ONCE (has-once, the
+   *     exact `highScore` pattern) so restarts never re-zero it;
+   *   - `harness.ts`'s `readValues()` reports each named key that exists in
+   *     the registry, which is what makes the upstream `value_persists`
+   *     assertion able to see it at all (before this field existed,
+   *     `readValues()` was hardcoded to `highScore` only — a project
+   *     declaring any other persistent value had no observable channel and
+   *     the assertion could only report unmet-precondition).
+   *
+   * Reserved names `score` (re-zeroed every `create()` by design) and
+   * `highScore` (owned by the reference scene) are rejected — declaring
+   * either would promise a persistence they don't have.
+   */
+  readonly persistValues?: readonly string[]
 }
 
 function validationError(path: string, message: string): never {
@@ -305,6 +328,27 @@ function readRules(value: unknown): GameRules {
 }
 
 /**
+ * Validates the optional top-level `persistValues` declaration. Identifier
+ * charset + reserved-name rejection — see `GameDataManifest.persistValues`.
+ */
+function readPersistValues(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) validationError('persistValues', `必须是字符串数组，实际是 ${JSON.stringify(value)}`)
+  const reserved = ['score', 'highScore']
+  const seen = new Set<string>()
+  return value.map((name, index) => {
+    if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)) {
+      validationError(`persistValues[${index}]`, `必须是匹配 /^[a-zA-Z][a-zA-Z0-9_]*$/ 的标识符，实际是 ${JSON.stringify(name)}`)
+    }
+    if (reserved.includes(name)) {
+      validationError(`persistValues[${index}]`, `"${name}" 是模板保留名（${name === 'score' ? '每次 create() 重置' : '参考场景自有'}），不许声明为持久值——换一个名字`)
+    }
+    if (seen.has(name)) validationError(`persistValues[${index}]`, `"${name}" 重复声明`)
+    seen.add(name)
+    return name
+  })
+}
+
+/**
  * Parses and STRICTLY validates the raw text of `game-data.json`.
  *
  * Throws — never returns a partial/empty manifest — on every bad shape:
@@ -335,10 +379,13 @@ export function parseAndValidateGameData(raw: string | undefined): GameDataManif
     validationError('vocabulary', `必须是对象，实际是 ${JSON.stringify(vocabulary)}`)
   }
 
+  const persistValues = parsed['persistValues']
+
   return {
     levels: levels.map(readLevelEntry),
     ...(parsed['rules'] !== undefined ? { rules: readRules(parsed['rules']) } : {}),
     ...(vocabulary !== undefined ? { vocabulary: vocabulary as Readonly<Record<string, unknown>> } : {}),
+    ...(persistValues !== undefined ? { persistValues: readPersistValues(persistValues) } : {}),
   }
 }
 
@@ -438,6 +485,17 @@ export function getVocabulary(): Readonly<Record<string, unknown>> {
 /** Direct read for `tests/game-data.test.mjs` — the registry as evidence entries, in insertion order. */
 export function getConsumedEntries(): readonly DataEntrySnapshot[] {
   return [...moduleState.consumed.entries()].map(([id, section]) => ({ id, section }))
+}
+
+/**
+ * The declared persist-value names, or `[]` when the manifest declared none
+ * or hasn't initialized yet. Deliberately lenient (no `requireInitialized()`):
+ * `harness.ts`'s `readValues()` runs on the Boot/Preload states too, where
+ * it must report `{}` rather than throw — absence is information, not an
+ * error, same call as `readValues()`'s own `has()` guards.
+ */
+export function getPersistValueNames(): readonly string[] {
+  return moduleState.manifest?.persistValues ?? []
 }
 
 /**

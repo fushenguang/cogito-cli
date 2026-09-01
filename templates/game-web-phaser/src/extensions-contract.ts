@@ -17,7 +17,14 @@
  * and `scene.goal` already exist, `scene.registry` already carries
  * `score`/`highScore` (HUD text follows `registry.set('score', ...)`
  * — UiScene listens on `changedata-score`; `game-doc.json`'s
- * `screens.scoreLabel` renames the HUD counter, e.g. 罐).
+ * `screens.scoreLabel` renames the HUD counter, e.g. 罐), and every name
+ * declared in game-data.json's top-level `persistValues` is initialized
+ * once and never re-zeroed on restarts — a counter that must survive
+ * level restarts / state jumps goes there, where the harness's snapshot
+ * `values` (and thus the `value_persists` assertion) can see it. The other
+ * machine-visible channel is named triggers:
+ * `import { registerTrigger } from '../debug/harness'` — the
+ * `score_feedback`/`game_over_trigger` assertions fire them by name.
  *
  * 🟡 Floor-preservation duties of every extension:
  *   - Do NOT remove/hide the player, the goal, or the HUD.

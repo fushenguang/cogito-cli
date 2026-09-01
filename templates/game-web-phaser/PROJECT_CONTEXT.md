@@ -14,6 +14,7 @@ This template ships **factory-playable**: out of `cc init`, the project already 
 - The fixed pages render their copy through DOM overlays (`src/screen-dom.ts`), text sourced from `game-doc.json`'s `screens`/`theme`. Recorded 2026-09-01: measured on this scaffold's own build (macOS headless), Phaser Text rendered fine too — DOM is chosen for environment-independence (the browser's primary text pipeline), not because headless can't render Text. Don't migrate the pages to Phaser Text; customize via `game-doc.json`.
 
 - **Mechanics the interpreter doesn't know go in `src/extensions/`** (also your write surface): declare `extension: {module, config}` on the level in `game-data.json`, export `setup(scene, config)` from `src/extensions/<module>.ts`. The HUD counter follows `registry.set('score', ...)` and is renamable via `screens.scoreLabel` (e.g. 罐). Contract: `src/extensions-contract.ts`; guide: `src/extensions/README.md`.
+- **Values that must survive scene restarts** (a counter accumulating across levels, say) are declared once in `game-data.json`'s top-level `"persistValues": ["jar"]` and written through `registry.set(name, ...)` — declared names are never re-zeroed on restart and show up in the harness snapshot's `values` (`node scripts/playtest.mjs --state Game --replay 3` prints them per restart round).
 
 Your job is the ceiling, not the floor: turn the tutorial data into a real game — levels, copy, assets, rules, and extension mechanics — inside the slots above.
 
