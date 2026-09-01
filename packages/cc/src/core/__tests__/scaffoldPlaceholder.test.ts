@@ -272,7 +272,14 @@ describe('scaffoldProject — end-to-end placeholder substitution (real template
       'utf-8',
     )
     expect(startScene).not.toContain(PROJECT_NAME_PLACEHOLDER)
-    expect(startScene).toContain('星星收集')
+    // Since 2026-09-01 (factory-playable B1) the start page's title lives in
+    // game-doc.json and is rendered by src/screen-dom.ts — StartScene.ts no
+    // longer carries the copy itself. The substitution's real destination is
+    // the doc's title field.
+    const gameDoc = JSON.parse(
+      readFileSync(join(targetDir, 'public', 'game-doc.json'), 'utf-8'),
+    ) as { title: string }
+    expect(gameDoc.title).toBe('星星收集')
   })
 
   it('rejects a displayName containing unsafe characters, even when name is valid', () => {
