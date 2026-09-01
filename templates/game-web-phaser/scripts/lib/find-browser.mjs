@@ -7,12 +7,16 @@
 //
 //   1. process.env.CHROME_PATH               — explicit escape hatch for a human/CI
 //   2. process.env.PLAYWRIGHT_BROWSERS_PATH   — respects a non-default Playwright install
-//   3. $HOME/.cache/ms-playwright             — Playwright's normal default location
-//   4. /.cache/ms-playwright                  — the guest-specific case: Shelley runs as
+//   3. $HOME/Library/Caches/ms-playwright     — Playwright's default location on macOS
+//                                                (added 2026-09-01: the chain only knew the
+//                                                Linux paths, so a template project on a
+//                                                dev's Mac failed to find any browser)
+//   4. $HOME/.cache/ms-playwright             — Playwright's normal default on Linux
+//   5. /.cache/ms-playwright                  — the guest-specific case: Shelley runs as
 //                                                root with HOME=/, so Playwright installed
 //                                                browsers under the filesystem root instead
 //                                                of a real home directory.
-//   5. PATH (google-chrome / chromium / chromium-browser)
+//   6. PATH (google-chrome / chromium / chromium-browser)
 //
 // If none of these resolve to a real binary, this prints every path it
 // looked at and exits non-zero. It MUST NOT print "skipping" and exit 0 —
@@ -142,6 +146,13 @@ export function resolveBrowser() {
     if (found) return finalize(found, 'PLAYWRIGHT_BROWSERS_PATH env var')
   } else {
     attempts.push('$PLAYWRIGHT_BROWSERS_PATH (not set)')
+  }
+
+  if (process.platform === 'darwin') {
+    const macCache = join(homedir(), 'Library', 'Caches', 'ms-playwright')
+    attempts.push(`${macCache}  (macOS Playwright default)`)
+    const foundMac = scanPlaywrightRoot(macCache)
+    if (foundMac) return finalize(foundMac, 'macOS $HOME/Library/Caches/ms-playwright')
   }
 
   const homeCache = join(homedir(), '.cache', 'ms-playwright')

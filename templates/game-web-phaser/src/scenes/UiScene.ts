@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { GAME_WIDTH, PLAYFIELD_HEIGHT } from '../config'
-import { normalizeGameDoc } from '../game-doc'
+import { normalizeGameDoc, resolveScreens } from '../game-doc'
 import { getDocButtonRect, DOC_BUTTON_DIAMETER, DOC_BUTTON_MARGIN_X } from '../doc-panel-geometry'
 import { openDocPanel } from '../doc-panel'
 import { BGM_AUDIO_KEY } from '../game-assets'
@@ -89,9 +89,13 @@ export class UiScene extends Phaser.Scene {
 
   create(): void {
     const initialScore = (this.registry.get('score') as number | undefined) ?? 0
+    // Score label copy is game-doc content (`screens.scoreLabel`, default
+    // 得分) — the HUD's NUMBER is engine state, but what the player reads
+    // around it belongs to the project's own copy, same as the fixed pages.
+    const screens = resolveScreens(normalizeGameDoc(this.cache.json.get('gameDoc')))
 
     this.scoreText = this.add
-      .text(16, PLAYFIELD_HEIGHT + 8, `Score: ${initialScore}`, {
+      .text(16, PLAYFIELD_HEIGHT + 8, `${screens.scoreLabel}：${initialScore}`, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '20px',
         color: '#e5e7eb',
@@ -99,7 +103,7 @@ export class UiScene extends Phaser.Scene {
       .setScrollFactor(0)
 
     this.add
-      .text(GAME_WIDTH / 2, PLAYFIELD_HEIGHT + 40, 'Arrow keys to move · Space to shoot · R to restart', {
+      .text(GAME_WIDTH / 2, PLAYFIELD_HEIGHT + 40, '←/→ 移动 · ↑/空格 跳跃 · R 重开', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '14px',
         color: '#9ca3af',
@@ -112,7 +116,7 @@ export class UiScene extends Phaser.Scene {
     // instance's death unless explicitly removed, so the SHUTDOWN handler
     // below is not optional cleanup, it's what makes attaching this safe.
     const onScoreChanged = (_registryOwner: Phaser.Game, value: number): void => {
-      this.scoreText.setText(`Score: ${value}`)
+      this.scoreText.setText(`${screens.scoreLabel}：${value}`)
     }
     this.registry.events.on('changedata-score', onScoreChanged)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {

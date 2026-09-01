@@ -2,20 +2,30 @@
   "levels": [
     {
       "id": "level-1",
-      "name": "示例：空跑道（正式开工时整体替换本文件）",
+      "name": "教学关：向右走到底",
       "backgroundLevel": 1,
-      "playerSpawn": {
-        "x": 480,
-        "y": 396
-      },
-      "initialCoins": [],
+      "playerSpawn": { "x": 80, "y": 400 },
+      "platforms": [
+        { "x": 0, "y": 436, "width": 960, "height": 40 },
+        { "x": 150, "y": 352, "width": 130, "height": 20 },
+        { "x": 400, "y": 300, "width": 170, "height": 20 },
+        { "x": 640, "y": 240, "width": 150, "height": 20 }
+      ],
+      "goal": { "x": 910, "y": 412 },
+      "initialCoins": [
+        { "x": 300, "y": 404 },
+        { "x": 250, "y": 344 },
+        { "x": 470, "y": 292 },
+        { "x": 680, "y": 232 }
+      ],
       "initialObstacles": []
     }
   ],
   "rules": {
-    "playerSpeed": 260,
-    "bulletSpeed": 420,
-    "coinValue": 1,
-    "shootValue": 1
+    "playerSpeed": 200,
+    "jumpVelocity": 480,
+    "gravityY": 900,
+    "coinValue": 10,
+    "artBackground": false
   }
 }

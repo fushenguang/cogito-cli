@@ -103,6 +103,22 @@ The outer platform can drop AI-generated art/audio into `public/assets/` (`title
 - The upstream `data_from_files` assertion (in the sample `assertions.json`) judges exactly this, from three layers of evidence in `getSnapshot().data`: `declared` (what the manifest says) / `loaded` (the loader actually initialized) / `usedInScene` (a scene build actually took entries through the accessors). **All three must be non-empty; a missing manifest is a FAILURE, not an unmet precondition** — that asymmetry with rule 6's trigger/state preconditions is deliberate and is the whole point of the template. What it honestly cannot catch: a scene that consumes an entry and then ignores it (double bookkeeping) — don't do that either, but know the gate's boundary.
 - Do not bypass `src/game-data.ts` (fetching the JSON yourself, or importing data as a TS module): bypassing leaves `usedInScene` empty, which fails the gate — the bypass is what's wrong, not the gate.
 
+### 10. The AI write surface — data/copy/assets are yours; scene and page code is not (2026-09-01)
+
+**Real incident (the reason this rule exists):** the platform's 小小财迷 M1 run produced a game every module rated green and the builder rated 「垃圾游戏」 — because no module was responsible for what a real player sees. The fix this template now embodies is a split: the playable FLOOR (title page → tutorial level → ending page → restart) is guaranteed by the template's own code and re-proven by `pnpm build:play`'s selfcheck on every build; the AI earns the FUN CEILING inside declared slots. The moment an executor edits scene/page code to "fix" something, the floor stops being structural — 16 green modules shipping a garbage game is exactly what editing outside the slots reproduces.
+
+`scripts/check-write-surface.mjs` (run by `pnpm verify` as the WS gate, anchored on this repo's `cc init: scaffold` root commit) enforces this mechanically:
+
+**You may edit (content slots):** `public/game-data.json` (levels/rules/vocabulary — rule 9), `public/game-doc.json` (all fixed-page copy + theme colours: `screens`/`theme` sections), `public/game-assets.json` (rule 8 manifest), `assertions.json`, `PROJECT_CONTEXT.md` (your cross-session handoff — update it every meaningful step), `README.md`.
+
+**You may create, under:** `public/**` (new data files + assets), `src/extensions/**` (reserved for project-specific scene/mechanism code — note the template does not auto-load these yet; wiring an extensions entry point is a deliberate template change, ask a human), `docs/**`, `assets/**`.
+
+**Everything else is template-owned and read-only for you** — `src/scenes/*`, `src/screen-dom.ts` (the fixed Start/GameOver/Settings pages), `src/debug/*`, `src/config.ts`, `scripts/*`, `tests/*`, `index.html`, `vite.config.ts`, `package.json`, this AGENTS.md. A WS violation turns `pnpm verify` red with the offending path named. If the slot genuinely cannot express what the game needs (a new mechanic, a new screen), that is a template-contract gap — surface it in your report, don't edit around it.
+
+**首关机通 invariant:** `levels[0]` must stay completable by holding → with periodic jumps (the tutorial's ground path is unobstructed by construction; that is why it ships with `initialObstacles: []` — see `game-doc.json`'s notDoing). `pnpm build:play`'s selfcheck plays level 1 exactly that way through real input, so a level design that breaks machine completion breaks the build. Designing harder traversal into level 1 is changing this invariant deliberately — not a bug you found.
+
+**Why the fixed pages render copy through DOM, not Phaser Text (recorded 2026-09-01):** measured on this scaffold's own build (macOS chrome-headless-shell, Phaser 4.2.1), Phaser Text rendered both Latin and CJK fine — "headless never renders Text" is NOT supported here, and we do not claim it. DOM text is chosen because it is the browser's primary text pipeline (one fewer environment-dependent link: no Canvas2D→texture chain, no host font-coverage question in the delivery environment), and because `scripts/selfcheck.mjs` pixel-asserts the critical copy in the REAL delivered artifact on every `build:play`. Do not "migrate" the pages to Phaser Text; do not move their copy into scene code — customize everything through `game-doc.json`.
+
 ## Project layout
 
 ```text
@@ -110,26 +126,36 @@ index.html            # entry HTML + the CSS reset that keeps the canvas positio
 vite.config.ts         # dev/preview server config — port 8080 pinned (rule 2), build:play/build:learn outDir split
 assertions.json        # sample machine-judgable acceptance items (rule 6) — one per upstream template
 public/
-├── game-data.json     # the gameplay-content data layer (rule 9): levels / rules / vocabulary
-└── game-doc.json      # in-game documentation panel content (default-hidden)
+├── game-data.json     # the gameplay-content data layer (rule 9): levels / platforms / goal / coins / rules
+├── game-doc.json      # all player-facing copy: doc panel + fixed-screen texts (screens) + colours (theme) — see rule 10
+└── game-assets.json   # optional AI-asset manifest (rule 8) — present only after the project declares one
 scripts/
-├── verify.mjs          # pnpm verify — BH-0/BH-1/BH-2 + AU (asset usage) gates + IA assertion judging, one CDP session
+├── verify.mjs           # pnpm verify — WS + BH-0/BH-1/BH-2 + AU gates + IA assertion judging, one CDP session
+├── selfcheck.mjs        # the postbuild full-journey selfcheck build:play runs (acceptance #2): real click, real keys
+├── check-write-surface.mjs # the WS gate's engine (rule 10): paths changed since the scaffold must be inside the write surface
 ├── assert.mjs           # the IA judging engine verify.mjs calls; also runnable standalone (`node scripts/assert.mjs`)
-└── lib/                 # shared CDP/browser/static-server/PNG/entity-bounds/asset-usage plumbing scripts above use
+├── playtest.mjs         # input-recording instrument for a human to read (acceptance #5) — never a gate
+└── lib/                 # shared CDP/browser/static-server/PNG/entity-bounds/asset-usage/ink plumbing scripts above use
 tests/
 ├── state-jump.test.mjs  # traversal assertion for src/debug/state-jump.ts
 ├── harness-types.test.mjs # bare-Node import guard for src/debug/harness-types.ts
 ├── assert.test.mjs        # per-template judge tests (positive + negative) and design D6's order-independence test
 ├── asset-usage.test.mjs   # AU gate's absent/unavailable/judged tri-state (rule 8)
 ├── game-data.test.mjs     # data-layer validation, accessors, consumption registry, three-layer evidence (rule 9)
+├── game-doc.test.mjs      # doc normalization + screens/theme fallback semantics (every screen renders with no doc at all)
 ├── data-spine.test.mjs    # structural: scene classes carry no content constants; PreloadScene initializes the data layer
+├── ink.test.mjs           # region-ink pixel judgement incl. the hand-tuned-threshold negative cases (2026-09-01)
+├── selfcheck.test.mjs     # pure helpers of the postbuild selfcheck (jump-tap planner, DPR rect scaling)
+├── check-write-surface.test.mjs # the write surface boundary itself, pinned exactly as rule 10 states it
 ├── exit-decision.test.mjs # design D8's exit-code rule
 └── png.test.mjs           # non-empty-screenshot judgement, incl. the required solid-colour negative case
 src/
 ├── main.ts            # creates the Phaser.Game instance — should rarely need edits
-├── config.ts           # Phaser.Types.Core.GameConfig — Scale Manager lives here
+├── config.ts           # Phaser.Types.Core.GameConfig — Scale Manager + the default solid background live here
+├── screen-dom.ts        # the fixed Start/GameOver/Settings pages as DOM overlays (rule 10) — copy comes from game-doc.json
 ├── game-assets.ts       # game-assets.json manifest contract (AI-generated title/bg/char/bgm) — see rule 8
 ├── game-data.ts         # game-data.json contract: validation + accessors + consumption registry — see rule 9
+├── game-doc.ts          # game-doc.json contract: doc + screens + theme, with total-fallback resolution
 ├── debug/
 │   ├── state-jump.ts    # listStates/jump/isValidStart contract + reference impl (Boot/Preload/Start/Game/GameOver)
 │   ├── harness-types.ts # window.__gameHarness contract types — zero imports, see rule 6
@@ -138,20 +164,19 @@ src/
 └── scenes/
     ├── BootScene.ts     # engine-level setup only, runs first
     ├── PreloadScene.ts  # load assets + initialize the data layer (rule 9), generate placeholder textures, show progress
-    ├── StartScene.ts     # title/start screen — the only way into Game; also where BGM playback starts (see rule 8)
+    ├── StartScene.ts     # title/start screen — the only way into Game; mounts the DOM start page (screen-dom.ts)
     ├── GameScene.ts     # the playable scene, built FROM game-data.json (rule 9) + the input-capture reference pattern
     ├── UiScene.ts        # HUD layer, launched parallel to GameScene — see rule 7 (HUD band / playfield)
-    └── GameOverScene.ts # the failure state (`role: 'gameover'`) + restart-to-gameplay
+    └── GameOverScene.ts # the ending page (`role: 'gameover'`): win/lose variants + restart + back-to-title
 ```
 
 Keep this split. Don't collapse Boot/Preload/Game back into one file — it's what makes the loading screen, the asset pipeline, and gameplay independently replaceable and testable.
 
 ## May execute autonomously
 
-- `pnpm install`, `pnpm build`, `pnpm check-types`, `pnpm test`, `pnpm verify`
+- `pnpm install`, `pnpm build`, `pnpm build:play` (includes the selfcheck), `pnpm check-types`, `pnpm test`, `pnpm verify`
 - Starting/stopping the dev server **in the background** (rule 1)
-- Adding scenes under `src/scenes/`, adding assets under `public/`
-- Editing any file in `src/`
+- Editing files inside the AI write surface (rule 10): the `public/` data/copy manifests, `assertions.json`, `README.md`, and new files under `public/`, `src/extensions/`, `docs/`, `assets/`
 - `git add` / `git commit` (local only)
 
 ## Must pause and confirm with a human
@@ -171,7 +196,17 @@ Keep this split. Don't collapse Boot/Preload/Game back into one file — it's wh
 ## Acceptance checklist before calling a task done
 
 1. `pnpm check-types` — exits 0.
-2. `pnpm verify` — exits 0. This is the executable replacement for "build it and take a screenshot": it builds `dist-play/` (BH-0), loads it in real headless Chromium over CDP and fails loudly if the page throws an uncaught exception or has a failed resource request (BH-1), and fails loudly if the rendered screenshot is provably empty (solid-colour PNG, not just "a PNG exists"), the game canvas has zero size, or any named entity (`getSnapshot().entities`) has drifted outside the game's world bounds (BH-2). If `public/game-assets.json` declared anything, it also fails loudly if none of the declared assets reached the texture/audio cache, or if bgm/background/character each fail their own per-category usage rule (AU — see rule 8). Read `scripts/verify.mjs` for the exact judgement, and `pnpm test` for the unit tests behind it (`tests/`). If this project has an `assertions.json`, `pnpm verify` also judges every item in it against `window.__gameHarness` right after the BH/AU gates (same CDP session, no second page load) and exits non-zero if any of them fail — see rule 6 above before touching scenes if this project uses machine-judgable acceptance items.
+2. `pnpm build:play` — exits 0, **which now includes the full-journey selfcheck** (`scripts/selfcheck.mjs` runs as postbuild). In one real headless-Chromium CDP session it: loads the built artifact, requires stateId=Start, **pixel-asserts the Start page's title** (region modal-colour + ink ratio, with a positive control on the title region and a negative control on an empty corner), **clicks the real start button** (coordinates from `getBoundingClientRect`, trusted input pipeline), requires the Game state with player+goal entities present, **plays level 1 with real keyboard input** (hold → + periodic jump — the machine-completion invariant, rule 10) until the goal is reached, pixel-asserts the GameOver page's text, clicks back-to-title, and requires Start again. If any step fails, the build fails. This is the structural guarantee that the playable FLOOR survived your content edits — 8 steps, real input, no `applyState` shortcuts.
+3. `pnpm verify` — exits 0. Same as before, plus the **WS gate** runs first (rule 10): any path changed since the scaffold root commit but outside the AI write surface fails the verify. Then BH-0/BH-1/BH-2 + AU + IA as documented: it builds `dist-play/` (BH-0), loads it in real headless Chromium over CDP and fails loudly if the page throws an uncaught exception or has a failed resource request (BH-1), and fails loudly if the rendered screenshot is provably empty (solid-colour PNG, not just "a PNG exists"), the game canvas has zero size, or any named entity (`getSnapshot().entities`) has drifted outside the game's world bounds (BH-2). If `public/game-assets.json` declared anything, it also fails loudly if none of the declared assets reached the texture/audio cache, or if bgm/background/character each fail their own per-category usage rule (AU — see rule 8). If this project has an `assertions.json`, every item in it is judged against `window.__gameHarness` right after the BH/AU gates (same CDP session) — see rule 6.
+4. Dev server started **in the background** (rule 1), and reachable at `http://localhost:8080/`.
+5. Every interactive key/control your change touches has been pressed and observed, not just one of them (rule 5). The selfcheck in acceptance #2 already plays level 1 end-to-end with real input — this item is for the **changes beyond that floor**: your new level's geometry, your new mechanic. `pnpm verify` and the selfcheck do not explore levels other than level 1 — **`node scripts/playtest.mjs` prints what you need to read**:
+   ```bash
+   pnpm build:play
+   node scripts/playtest.mjs --state <your level> --press ArrowRight,Space
+   ```
+   It jumps to a state, presses the keys you name, and prints each named entity's coordinates before and after every press, plus a screenshot. 🔴 **It never judges — it prints numbers, you read them.** It cannot know which entities are *supposed* to move: a level's goal marker sitting still and your player sitting still produce the identical `dx=0.0 dy=0.0` reading, and only you know which one is a bug. That distinction is the whole reason this is a script and not a gate — no gate in this template can make it either. Paste the output into your report; "I verified it works" without those numbers is not evidence.
+   🔴 **Do not hand-write your own CDP/eval expressions to do this.** Measured on a real run: 3 of that run's 7 blockers were mistakes inside hand-written expressions (`Illegal return statement`, `Phaser is not defined`, calling `.then()` on the synchronous `getSnapshot()`) — none of them were about the game.
+6. Working state committed to git (rule 3).
 3. Dev server started **in the background** (rule 1), and reachable at `http://localhost:8080/`.
 4. Every interactive key/control your change touches has been pressed and observed, not just one of them (rule 5). `pnpm verify` does not simulate keyboard input — **`node scripts/playtest.mjs` does**. Run it before you say you're done:
    ```bash

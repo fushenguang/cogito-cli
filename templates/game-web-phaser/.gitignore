@@ -33,3 +33,6 @@ Thumbs.db
 
 # scripts/playtest.mjs 的截图产物——是给人看的一次性观测，不入库
 .playtest-screenshot.png
+
+# scripts/selfcheck.mjs 的取证截图——每次 build:play 重写，是运行产物不是源码
+.selfcheck/
