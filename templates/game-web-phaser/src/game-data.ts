@@ -84,6 +84,22 @@ export interface SpawnPoint {
   readonly y: number
 }
 
+/**
+ * One solid platform rectangle, TOP-LEFT corner + size. Top-left (not
+ * center) because the data models a rect of world space, matching how the
+ * scene builds it (`add.rectangle(x + width/2, y + height/2, width, height)`
+ * centers Phaser's origin). Geometry follows the official platformer
+ * tutorial's platform model — examples/public/src/games/my first
+ * game/gameObjects/Platform.js (width × tile-height slabs) — minus its
+ * tile-art dependency: the scaffold stamps a flat texture instead.
+ */
+export interface PlatformRect {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+}
+
 /** One level's content. Everything here is DATA: changing it changes the level, with zero scene-code edits. */
 export interface GameLevelEntry {
   /** Stable id, unique across levels. Becomes the `levels:<id>` evidence entry. */
@@ -94,18 +110,48 @@ export interface GameLevelEntry {
   readonly backgroundLevel: number
   /** Where the player starts. Validated to the playfield. */
   readonly playerSpawn: SpawnPoint
+  /**
+   * Solid platforms, including the ground. Required NON-empty — a level with
+   * nothing to stand on is the "empty runway" the 小小财迷 builder judged a
+   * garbage game (issue #B3: the scaffold ships playable by construction).
+   */
+  readonly platforms: readonly PlatformRect[]
+  /**
+   * The goal/exit position (center of the exit sprite). Reaching it is the
+   * win condition — the Exit pattern from the official tutorial's
+   * Game.js/Exit.js (overlap → level cleared).
+   */
+  readonly goal: SpawnPoint
   /** Static coins the level starts with. May be empty (a level that only spawns coins dynamically is legal). */
   readonly initialCoins: readonly SpawnPoint[]
   /** Static obstacles the level starts with. May be empty. */
   readonly initialObstacles: readonly SpawnPoint[]
 }
 
-/** Gameplay parameters shared across a game's levels. */
+/**
+ * Gameplay parameters shared across a game's levels — the platformer
+ * trio (gravity / jump / move) included, per the official tutorial's
+ * pairing (my first game/game.js gravity y=1000 with Player.js
+ * jumpVelocity=-520, moveVelocity=200). Values here are magnitudes: the
+ * scene applies `setVelocityY(-rules.jumpVelocity)` for a jump.
+ */
 export interface GameRules {
+  /** Horizontal run speed, px/s. */
   readonly playerSpeed: number
-  readonly bulletSpeed: number
+  /** Jump impulse magnitude, px/s (applied negative on Y). */
+  readonly jumpVelocity: number
+  /** World gravity on Y, px/s² (positive = downward). */
+  readonly gravityY: number
+  /** Score added per collected coin. */
   readonly coinValue: number
-  readonly shootValue: number
+  /**
+   * Prototype-stage art-background switch (issue #10). `false` (the
+   * scaffold default) keeps the flat background even if the platform
+   * delivered art; `true` opts into drawing declared art backgrounds;
+   * ABSENT keeps the legacy behavior (draw art if the manifest declared
+   * and loaded it) so existing projects never change silently.
+   */
+  readonly artBackground?: boolean
 }
 
 export interface GameDataManifest {
@@ -159,23 +205,57 @@ function readLevelEntry(value: unknown, index: number): GameLevelEntry {
     validationError(`${path}.backgroundLevel`, `必须是 ≥1 的整数（game-assets.json 的 level<N> 编号契约），实际是 ${backgroundLevel}`)
   }
   const playerSpawn = readPlayfieldPoint(value['playerSpawn'], `${path}.playerSpawn`)
+  const platforms = readPlatformList(value['platforms'], `${path}.platforms`)
+  const goal = readPlayfieldPoint(value['goal'], `${path}.goal`)
   return {
     id,
     name,
     backgroundLevel,
     playerSpawn,
+    platforms,
+    goal,
     initialCoins: readPlacementList(value['initialCoins'], `${path}.initialCoins`),
     initialObstacles: readPlacementList(value['initialObstacles'], `${path}.initialObstacles`),
   }
 }
 
+/** Validates one {x, y, width, height} platform rect to the playfield contract (top-left + size semantics). */
+function readPlatformRect(value: unknown, path: string): PlatformRect {
+  if (!isPlainObject(value)) validationError(path, `必须是 { "x": number, "y": number, "width": number, "height": number } 对象（左上角+尺寸），实际是 ${JSON.stringify(value)}`)
+  const x = readNumber(value, 'x', path)
+  const y = readNumber(value, 'y', path)
+  const width = readNumber(value, 'width', path)
+  const height = readNumber(value, 'height', path)
+  if (width <= 0 || height <= 0) validationError(`${path}`, `宽高必须 > 0，实际是 ${width}x${height}`)
+  if (x < 0 || x + width > GAME_WIDTH) validationError(`${path}.x`, `平台必须横向落在 [0, ${GAME_WIDTH}] 内，实际是 x=${x} width=${width}`)
+  if (y < 0 || y + height > PLAYFIELD_HEIGHT) validationError(`${path}.y`, `平台必须纵向落在 [0, ${PLAYFIELD_HEIGHT}]（PLAYFIELD_HEIGHT，HUD 带以下属于 UiScene）内，实际是 y=${y} height=${height}`)
+  return { x, y, width, height }
+}
+
+function readPlatformList(value: unknown, path: string): readonly PlatformRect[] {
+  if (!Array.isArray(value)) validationError(path, `必须是数组，实际是 ${JSON.stringify(value)}`)
+  if (value.length === 0) validationError(path, '空数组——没有可站立平台的关卡就是「空跑道」（出厂可玩基线的反面），至少要有一块地面')
+  return value.map((entry, index) => readPlatformRect(entry, `${path}[${index}]`))
+}
+
 function readRules(value: unknown): GameRules {
   if (!isPlainObject(value)) validationError('rules', `必须是对象，实际是 ${JSON.stringify(value)}`)
+  const gravityY = readNumber(value, 'gravityY', 'rules')
+  if (gravityY <= 0) validationError('rules.gravityY', `必须是正数（重力向下），实际是 ${gravityY}`)
+  const jumpVelocity = readNumber(value, 'jumpVelocity', 'rules')
+  if (jumpVelocity <= 0) validationError('rules.jumpVelocity', `必须是正的冲量大小（场景里取负向上），实际是 ${jumpVelocity}`)
+  const playerSpeed = readNumber(value, 'playerSpeed', 'rules')
+  if (playerSpeed <= 0) validationError('rules.playerSpeed', `必须是正数，实际是 ${playerSpeed}`)
+  const artBackground = value['artBackground']
+  if (artBackground !== undefined && typeof artBackground !== 'boolean') {
+    validationError('rules.artBackground', `必须是布尔值（issue #10 原型阶段美术背景开关），实际是 ${JSON.stringify(artBackground)}`)
+  }
   return {
-    playerSpeed: readNumber(value, 'playerSpeed', 'rules'),
-    bulletSpeed: readNumber(value, 'bulletSpeed', 'rules'),
+    playerSpeed,
+    jumpVelocity,
+    gravityY,
     coinValue: readNumber(value, 'coinValue', 'rules'),
-    shootValue: readNumber(value, 'shootValue', 'rules'),
+    ...(artBackground !== undefined ? { artBackground } : {}),
   }
 }
 

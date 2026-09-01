@@ -23,7 +23,18 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   parent: 'app',
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  backgroundColor: '#1d1f2b',
+  // Issue #10 (2026-09-01): the prototype background is a flat, deliberately
+  // "no game would ship this" color, so every entity is machine-judgeable by
+  // contrast at scaffold time — see cai-m1-task2-eval's "拼接悖论" verdict:
+  // nothing was responsible for what the player actually SEES. Warm dark
+  // olive-brown was chosen because it is hue-orthogonal to the whole
+  // placeholder entity set (player blue #60a5fa, coin green #34d399,
+  // obstacle red #ef4444, platform slate #46536e, goal pennant cyan
+  // #22d3ee): every one of those reads as a large RGB distance against
+  // #2b2419, and none of them ever blends into it. A real art pass opts back
+  // into backgrounds per-level via game-data rules (`artBackground`) or the
+  // delivered title/level images.
+  backgroundColor: '#2b2419',
 
   // ─────────────────────────────────────────────────────────────────────
   // Scale Manager — DO NOT remove or change `mode`/`autoCenter` casually.
@@ -56,19 +67,21 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   physics: {
     default: 'arcade',
     arcade: {
+      // Gravity stays 0 HERE on purpose: it is per-game RULES content
+      // (`game-data.json` rules.gravityY), applied by GameScene.create() at
+      // runtime — see that scene's own comment. Engine config stays neutral
+      // so a different game feel is a data edit, not a config fork.
       gravity: { x: 0, y: 0 },
       debug: false,
     },
   },
 
-  // Boot -> Preload -> Start -> Game -> GameOver (on the 'obstacle'
-  // overlap) -> Game again (R restarts). Keep scenes single-purpose and
-  // split like this instead of doing loading + start screen + gameplay in
-  // one file — it's what makes the loading screen, the start screen, and
-  // the actual game independently testable/replaceable. `GameOverScene`
-  // restarts straight to `Game`, not back through `Start` — the start
-  // screen is a one-time entry point for a session, not a state a real
-  // player revisits mid-run.
+  // Boot -> Preload -> Start -> Game -> GameOver (goal overlap = cleared /
+  // obstacle overlap = lost) -> Game again (再玩一次 button, or R) or Start
+  // (回标题页 button). Keep scenes single-purpose and split like this
+  // instead of doing loading + start screen + gameplay in one file — it's
+  // what makes the loading screen, the start screen, and the actual game
+  // independently testable/replaceable.
   //
   // `UiScene` is not a step in that chain — it's not a "state" (it has no
   // entry in `debug/state-jump.ts`'s `StateId`/`listStates()`). GameScene

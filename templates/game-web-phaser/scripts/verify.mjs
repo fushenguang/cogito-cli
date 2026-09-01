@@ -57,6 +57,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { resolveBrowser } from './lib/find-browser.mjs'
+import { checkWriteSurface } from './check-write-surface.mjs'
 import { startStaticServer } from './lib/static-server.mjs'
 import { launchBrowser } from './lib/browser-launch.mjs'
 import { inspectPage } from './lib/inspect-page.mjs'
@@ -273,6 +274,28 @@ function runBuild() {
 
 async function main() {
   checkNodeWebSocket()
+
+  // ---- WS (AI write surface, issue #B5) ----
+  // Runs BEFORE the build: a repo-level judgement, and a violating project
+  // has no business spending a build. Only applies to cc-init scaffolded
+  // projects (root commit marker); developing the template itself reports
+  // not-applicable and moves on.
+  let wsPassed = true
+  const writeSurface = await checkWriteSurface()
+  if (writeSurface.applicable) {
+    if (writeSurface.violations.length > 0) {
+      fail(
+        'WS write surface',
+        `all ${writeSurface.checked} changed path(s) since the scaffold inside the AI write surface (AGENTS.md rule 10)`,
+        `${writeSurface.violations.length} outside:\n${writeSurface.violations.map((v) => `    - ${v.reason}`).join('\n')}`,
+      )
+    }
+    recordGate('WS', 'AI 可写面', true, `${writeSurface.checked} changed path(s) inside the write surface`)
+    console.log(`[verify] WS write surface — passed (${writeSurface.checked} changed path(s))`)
+  } else {
+    console.log('[verify] WS write surface — not applicable (not a cc-init scaffolded repo)')
+  }
+
   runBuild()
 
   const browser = resolveBrowser()
@@ -392,9 +415,13 @@ async function main() {
     // ---- FD (front-door walk) ----
     // Runs while the page is still in whatever state boots (Start), BEFORE
     // any applyState() below — the whole point is the real entry path. The
-    // click is a CDP mouse event at the start button's canvas coordinates
-    // (StartScene's button center, design-space 960x540 mapped through the
-    // canvas bounding rect), not a state jump.
+    // click is a CDP mouse event at the REAL start button's center —
+    // `screen-dom.ts` gives the button the stable `data-cogito="start"`
+    // selector, so this measures the button's rect instead of guessing a
+    // design-space coordinate. (Until 2026-09-01 this clicked a hardcoded
+    // 480,330 mapped through the canvas rect — coordinates that silently
+    // stopped pointing at anything when the start page became a DOM overlay,
+    // which is exactly the failure mode a stable selector exists to prevent.)
     let fdPassed = true // stays true when not applicable (D3 shape: visible, not fatal)
     const statesForDoor = await harness.listStates()
     const gameplayForDoor = statesForDoor.find((s) => s.role === 'gameplay') ?? null
@@ -403,22 +430,24 @@ async function main() {
       recordGate('FD', '前门', true, 'no state with role "gameplay" — front-door walk not applicable (D3: visible, not fatal)')
       console.log('[verify] FD front door — no gameplay-role state, walk not applicable')
     } else {
-      const canvasRect = await inspected.client.send(
+      const buttonRectEval = await inspected.client.send(
         'Runtime.evaluate',
         {
           expression:
-            '(() => { const c = document.querySelector("canvas"); if (!c) return null; const r = c.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height } })()',
+            '(() => { const el = document.querySelector(\'[data-cogito="start"]\'); if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height } })()',
           returnByValue: true,
         },
         inspected.sessionId,
       )
-      const rect = canvasRect?.result?.value
+      const rect = buttonRectEval?.result?.value
       if (rect === null || rect === undefined) {
-        fail('FD front door', 'a <canvas> element to click into', 'document.querySelector("canvas") returned nothing')
+        fail('FD front door', 'a [data-cogito="start"] button to click', 'the Start page did not mount its start button (screen-dom.ts)')
       }
-      // StartScene.drawStartButton(): rectangle at (GAME_WIDTH/2, GAME_HEIGHT/2+60) in 960x540 design space
-      const clickX = rect.left + (480 / 960) * rect.width
-      const clickY = rect.top + (330 / 540) * rect.height
+      if (rect.width <= 0 || rect.height <= 0) {
+        fail('FD front door', 'a visible start button', `button rect is ${rect.width}x${rect.height} — mounted but not visible`)
+      }
+      const clickX = rect.left + rect.width / 2
+      const clickY = rect.top + rect.height / 2
       for (const type of ['mousePressed', 'mouseReleased']) {
         await inspected.client.send(
           'Input.dispatchMouseEvent',
@@ -582,8 +611,11 @@ async function main() {
     // pass", so folding AU into it is the same shape IA itself already
     // established, not a new concept.
     // 🔴 FD and BH-3 fold into `bhPassed` exactly like AU: a red gate that
-    // leaves the verdict alone is not a gate (the M1 run2 lesson).
-    const nonIaPassed = auPassed && fdPassed && bh3Passed
+    // leaves the verdict alone is not a gate (the M1 run2 lesson). WS folds
+    // in the same way (it `fail()`s before the browser half when violated,
+    // so `wsPassed` is structurally `true` here — it reads as documentation
+    // of the fold, same as BH-0 above).
+    const nonIaPassed = auPassed && fdPassed && bh3Passed && wsPassed
     const verdict = decideVerdict({ bhPassed: nonIaPassed, assertions: assertionsResult })
     if (assertionsResult.status !== 'absent') {
       recordGate(

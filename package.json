@@ -8,7 +8,8 @@
     "test": "pnpm --filter @cogito.ai/cc test",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "changeset publish"
+    "changeset:publish": "changeset publish",
+    "check:template": "node scripts/check-template-playable.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",

@@ -67,18 +67,22 @@ pnpm dev
 
 Open [http://localhost:8080](http://localhost:8080). The port is fixed at `8080` (see `vite.config.ts`) — the platform hosting this project builds share/preview links against that exact port, so don't change it.
 
+Out of the box — before you change anything — the game is **already playable end-to-end**: title page → click start → tutorial platformer level (walk right, reach the goal flag) → ending page → restart / back to title. Your job is to turn that tutorial data into a real game (levels, copy, assets) inside the AI write surface — see `AGENTS.md` rule 10 and the "Factory state" section of `PROJECT_CONTEXT.md`.
+
 > Running as an autonomous agent? Start this in the **background**, never in the foreground — see rule 1 in `AGENTS.md`.
 
 ### 4. Build for production
 
 ```bash
-pnpm build:play     # public share build → dist-play/, no debug panel
+pnpm build:play     # public share build → dist-play/, then the full-journey selfcheck (below)
 pnpm build:learn    # non-public build → dist-learn/, includes the debug panel
 pnpm preview         # serves dist-play/ on port 8080
 pnpm preview:learn   # serves dist-learn/ on port 8090
 ```
 
 `pnpm build` (no target) is an alias for `pnpm build:play`. See [Two build targets](#two-build-targets) below for why there are two.
+
+🔴 `pnpm build:play` is **not** just `vite build`: after a successful build it runs `scripts/selfcheck.mjs`, which plays the built artifact end-to-end in headless Chromium through real input (a real click on the start button, real keyboard on level 1) and pixel-asserts the fixed pages' critical copy. If the full journey breaks, **the build exits non-zero** — a share link is never produced from a project whose floor silently rotted. This needs a Chromium on the machine (same discovery as `pnpm verify`). `build:learn` skips the selfcheck (the learn build carries the debug panel; the floor is asserted on the play build, the one a share link points at).
 
 ### 5. Type-check
 
@@ -92,7 +96,7 @@ pnpm check-types
 pnpm verify
 ```
 
-Builds `dist-play/`, loads it in real headless Chromium over CDP, and fails loudly (non-zero exit) if the build fails, the page throws an uncaught exception or has a failed resource request, or the rendered screenshot is provably empty or the canvas has zero size. If `public/game-assets.json` declared anything, it also fails loudly if none of the declared files reached the runtime, or if they loaded but nothing currently draws/plays them. If this project has an `assertions.json` at its root, `pnpm verify` also judges every item in it — same browser session, right after those checks — and fails loudly if any of them do. See [Verifying](#verifying) below and `scripts/verify.mjs`.
+Builds `dist-play/`, loads it in real headless Chromium over CDP, and fails loudly (non-zero exit) if the build fails, the page throws an uncaught exception or has a failed resource request, or the rendered screenshot is provably empty or the canvas has zero size. It first runs the **write-surface gate**: if any path outside the AI write surface (`AGENTS.md` rule 10) changed since this project was scaffolded, `verify` fails with the offending paths named. If `public/game-assets.json` declared anything, it also fails loudly if none of the declared files reached the runtime, or if they loaded but nothing currently draws/plays them. If this project has an `assertions.json` at its root, `pnpm verify` also judges every item in it — same browser session, right after those checks — and fails loudly if any of them do. See [Verifying](#verifying) below and `scripts/verify.mjs`.
 
 ```bash
 pnpm test
@@ -112,6 +116,8 @@ This template exists to structurally prevent bugs hit by earlier unstructured (v
 
 4. **"The health-check gates pass" being conflated with "the acceptance criteria are met."** A build that loads and renders can still be uncontrollable, never show a score, have no failure state, or hardcode all its content in scene classes — none of that shows up in a screenshot's pixel variance. `window.__gameHarness` (`src/debug/harness.ts`) plus `scripts/assert.mjs` close that gap for the 8 machine-judgable acceptance templates the outer platform can attach via `assertions.json` — see [Verifying](#verifying) below.
 
+5. **16 green modules shipping a garbage game (the 小小财迷 verdict, 2026-09-01).** Every module individually passing its own check, with no module responsible for what a real player actually sees in the browser. Fixed structurally, in three pieces: the template ships a **factory-playable floor** (fixed Start/GameOver/Settings pages as DOM overlays in `src/screen-dom.ts`, copy from `game-doc.json`'s `screens`/`theme`; a tutorial level in `game-data.json`), `pnpm build:play`'s **postbuild selfcheck** re-proves that floor on every build through real input (`scripts/selfcheck.mjs` — a real click, real keyboard, pixel-asserted copy), and the **write-surface gate** (`scripts/check-write-surface.mjs`, run by `pnpm verify`) keeps AI executors inside the content slots so the floor stays structural — data/copy/assets are yours, scene and page code is not (`AGENTS.md` rule 10).
+
 ## Two build targets
 
 | Target | Command                            | Output        | Port                        | Debug panel |
@@ -119,14 +125,15 @@ This template exists to structurally prevent bugs hit by earlier unstructured (v
 | Play   | `pnpm build:play` (= `pnpm build`) | `dist-play/`  | 8080 (`pnpm preview`)       | No          |
 | Learn  | `pnpm build:learn`                 | `dist-learn/` | 8090 (`pnpm preview:learn`) | Yes         |
 
-`dist-play/` is what a share link points at — the outer platform builds those links against the fixed, `strictPort`-enforced port 8080, and a student opening one should see the game, not a debug overlay. `dist-learn/` is for the person building the game.
+`dist-play/` is what a share link points at — the outer platform builds those links against the fixed, `strictPort`-enforced port 8080, and a student opening one should see the game, not a debug overlay. `dist-learn/` is for the person building the game. `build:play` additionally runs the postbuild full-journey selfcheck (`scripts/selfcheck.mjs`); `build:learn` does not — the floor is asserted on the build a share link points at.
 
 Which target you get is decided by `--mode` on the `vite build` CLI (see `vite.config.ts`'s `build.outDir` branch and `src/main.ts`'s `import.meta.env.MODE` check) — **not** by a runtime switch anyone could flip in the browser. If you add more learn-only tooling, gate it the same way: import it from inside an `if (import.meta.env.MODE === 'learn')` branch so it's dead code, not just hidden, in `dist-play/`.
 
 ## Verifying
 
-`pnpm verify` (`scripts/verify.mjs`) runs four gates, zero new dependencies — it spawns whatever Chromium already exists on the machine (Playwright's cache, `CHROME_PATH`, or `PATH`) and speaks CDP over Node's built-in `WebSocket` (Node ≥ 22):
+`pnpm verify` (`scripts/verify.mjs`) runs five gates, zero new dependencies — it spawns whatever Chromium already exists on the machine (Playwright's cache, `CHROME_PATH`, or `PATH`) and speaks CDP over Node's built-in `WebSocket` (Node ≥ 22):
 
+- **WS write surface** — before anything else: if this repo is a `cc init`-scaffolded project (root commit marker) and any path outside the AI write surface (`AGENTS.md` rule 10) changed since the scaffold, fail with the offending paths named. Not a scaffolded repo (developing the template itself)? Reports not-applicable and moves on.
 - **BH-0 build** — `vite build --mode play` exits 0.
 - **BH-1 load** — headless Chromium loads `dist-play/` with no uncaught JS exception and no failed resource request.
 - **BH-2 render** — the screenshot is provably non-empty (unique-colour count + pixel variance both clear a floor — a solid-colour PNG does **not** pass) and the game canvas has non-zero size.

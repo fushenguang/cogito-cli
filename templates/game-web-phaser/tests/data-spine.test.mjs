@@ -41,7 +41,11 @@ test('GameScene has no per-level content constants — it is an interpreter, not
     /BULLET_SPEED\s*=\s*\d/,
     /PLAYFIELD_HEIGHT - 80/, // the old hardcoded player spawn
     /GAME_WIDTH \/ 2,\s*PLAYFIELD_HEIGHT/, // the old hardcoded spawn pair
-    /setVelocityX\(-?\d/, // a speed literal would defeat rules.playerSpeed
+    // A NON-ZERO velocity literal would defeat rules.playerSpeed/jumpVelocity.
+    // Zero is exempt: `setVelocityX(0)` is the "no input means stand still"
+    // movement semantic, not content — the platformer rewrite tripped the old
+    // `-?\d` form on exactly that line.
+    /setVelocity[XY]\(-?[1-9]/,
   ]
   for (const pattern of forbidden) {
     assert.ok(!pattern.test(source), `GameScene.ts must not contain content constant matching ${pattern} — level content belongs in public/game-data.json`)

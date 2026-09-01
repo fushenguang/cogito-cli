@@ -43,7 +43,7 @@ import { initGameData, GAME_DATA_RAW_CACHE_KEY } from '../game-data'
  * them the normal Phaser way in `preload()`:
  *
  *   this.load.image('player', 'assets/player.png')
- *   this.load.audio('shoot', 'assets/shoot.mp3')
+ *   this.load.audio('jump', 'assets/jump.mp3')
  *
  * ...and put the files under `public/assets/` (Vite serves `public/` as-is
  * at the site root). The progress bar below already listens for the
@@ -170,7 +170,7 @@ export class PreloadScene extends Phaser.Scene {
 
   /** Draw simple shapes into the texture manager so GameScene has sprites to use. */
   private generatePlaceholderTextures(): void {
-    // 🔴 Guarded, unlike bullet/coin/obstacle below: if a manifest
+    // 🔴 Guarded, unlike coin/obstacle/goal below: if a manifest
     // character was keyed exactly `PLAYER_CHARACTER_KEY` ("player") and
     // loaded successfully, `queueManifestAssets()` (called from preload(),
     // which always runs before create()) already registered a real texture
@@ -187,12 +187,6 @@ export class PreloadScene extends Phaser.Scene {
       player.generateTexture(PLAYER_CHARACTER_KEY, 48, 48)
       player.destroy()
     }
-
-    const bullet = this.add.graphics()
-    bullet.fillStyle(0xfacc15, 1)
-    bullet.fillCircle(6, 6, 6)
-    bullet.generateTexture('bullet', 12, 12)
-    bullet.destroy()
 
     // coin/obstacle: what GameScene's 'score'/'gameover' triggers spawn
     // (see registerTrigger calls in GameScene.create()) — the assertion
@@ -211,5 +205,19 @@ export class PreloadScene extends Phaser.Scene {
     obstacle.fillRect(0, 0, 32, 32)
     obstacle.generateTexture('obstacle', 32, 32)
     obstacle.destroy()
+
+    // goal — the win-condition overlap target (GameScene names it 'goal';
+    // official lineage: my-first-game's Exit.js stamps a tile sprite, this
+    // scaffold's zero-binary-assets rule draws a flag instead — pole +
+    // pennant). The pennant's cyan sits far from the canvas background and
+    // every other placeholder color, keeping the exit machine-judgeable
+    // against the prototype background (issue #10).
+    const goal = this.add.graphics()
+    goal.fillStyle(0xe5e7eb, 1)
+    goal.fillRect(6, 0, 4, 48)
+    goal.fillStyle(0x22d3ee, 1)
+    goal.fillTriangle(10, 2, 30, 10, 10, 18)
+    goal.generateTexture('goal', 32, 48)
+    goal.destroy()
   }
 }

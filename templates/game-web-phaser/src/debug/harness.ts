@@ -12,6 +12,7 @@ import type {
 import { jump, isValidStart, listStates as listStateIds, type StateId, type GameState } from './state-jump'
 import { normalizeGameAssets, planAssetLoads, safeParseJson, GAME_ASSETS_RAW_CACHE_KEY } from '../game-assets'
 import { buildDataUsageEvidence, GAME_DATA_RAW_CACHE_KEY } from '../game-data'
+import { collectScreenTexts } from '../screen-dom'
 
 /**
  * `window.__gameHarness` reference implementation (design D1/D2/D3).
@@ -277,6 +278,13 @@ function collectTextsFrom(scene: Phaser.Scene | undefined, texts: string[]): voi
  * parallel scene (dimensions.ts's HUD band / playfield contract) means
  * `hud_text_present`/`score_feedback` would otherwise stop seeing it the
  * moment it moved, even though it's still genuinely on screen.
+ *
+ * 2026-09-01 (issue #11): the fixed Start/GameOver pages moved their copy
+ * from Phaser Text to a DOM overlay (`../screen-dom.ts`) — invisible to a
+ * scene-children scan for the mirror-image reason canvas text is invisible
+ * to a DOM query. `collectScreenTexts()` (that module's [data-hud-text]
+ * scan) is folded in here so `hud_text_present` keeps judging what's
+ * actually on screen regardless of which pipeline drew it.
  */
 function collectHudTexts(game: Phaser.Game, scene: Phaser.Scene | undefined): string[] {
   const texts: string[] = []
@@ -284,6 +292,7 @@ function collectHudTexts(game: Phaser.Game, scene: Phaser.Scene | undefined): st
   if (game.scene.isActive(UI_SCENE_KEY)) {
     collectTextsFrom(game.scene.getScene(UI_SCENE_KEY), texts)
   }
+  texts.push(...collectScreenTexts())
   return texts
 }
 

@@ -35,11 +35,13 @@ const VALID_MANIFEST_TEXT = JSON.stringify({
       name: '第一关：捡星尘',
       backgroundLevel: 1,
       playerSpawn: { x: 480, y: 396 },
+      platforms: [{ x: 0, y: 436, width: 960, height: 40 }],
+      goal: { x: 900, y: 412 },
       initialCoins: [{ x: 160, y: 120 }],
       initialObstacles: [{ x: 240, y: 360 }],
     },
   ],
-  rules: { playerSpeed: 260, bulletSpeed: 420, coinValue: 1, shootValue: 1 },
+  rules: { playerSpeed: 260, jumpVelocity: 500, gravityY: 1000, coinValue: 1 },
 })
 
 // GAME_WIDTH=960, PLAYFIELD_HEIGHT=476 (src/dimensions.ts).
@@ -56,8 +58,10 @@ test('a valid manifest parses with its content intact', () => {
   assert.equal(level.id, 'level-1')
   assert.equal(level.backgroundLevel, 1)
   assert.deepEqual(level.playerSpawn, { x: 480, y: 396 })
+  assert.deepEqual(level.platforms, [{ x: 0, y: 436, width: 960, height: 40 }])
+  assert.deepEqual(level.goal, { x: 900, y: 412 })
   assert.deepEqual(level.initialCoins, [{ x: 160, y: 120 }])
-  assert.deepEqual(manifest.rules, { playerSpeed: 260, bulletSpeed: 420, coinValue: 1, shootValue: 1 })
+  assert.deepEqual(manifest.rules, { playerSpeed: 260, jumpVelocity: 500, gravityY: 1000, coinValue: 1 })
 })
 
 test('vocabulary is optional and passes through when present', () => {
@@ -95,15 +99,42 @@ test('a level entry missing playerSpawn throws naming its path', () => {
 test('a spawn point outside the playfield throws naming the bound it broke', () => {
   const broken = {
     levels: [
-      { id: 'level-1', name: 'x', backgroundLevel: 1, playerSpawn: { x: 100, y: PLAYFIELD_HEIGHT + 50 }, initialCoins: [], initialObstacles: [] },
+      { id: 'level-1', name: 'x', backgroundLevel: 1, playerSpawn: { x: 100, y: PLAYFIELD_HEIGHT + 50 }, platforms: [{ x: 0, y: 436, width: 960, height: 40 }], goal: { x: 900, y: 412 }, initialCoins: [], initialObstacles: [] },
     ],
   }
   assert.throws(() => parseAndValidateGameData(JSON.stringify(broken)), /playerSpawn\.y/)
 })
 
+test('empty platforms is the "empty runway" shape and throws — the 小小财迷 garbage-game root', () => {
+  const broken = {
+    levels: [
+      { id: 'level-1', name: 'x', backgroundLevel: 1, playerSpawn: { x: 100, y: 100 }, platforms: [], goal: { x: 900, y: 412 }, initialCoins: [], initialObstacles: [] },
+    ],
+  }
+  assert.throws(() => parseAndValidateGameData(JSON.stringify(broken)), /空跑道/)
+})
+
+test('a platform hanging into the HUD band throws naming the bound it broke', () => {
+  const broken = {
+    levels: [
+      { id: 'level-1', name: 'x', backgroundLevel: 1, playerSpawn: { x: 100, y: 100 }, platforms: [{ x: 0, y: 460, width: 960, height: 40 }], goal: { x: 900, y: 412 }, initialCoins: [], initialObstacles: [] },
+    ],
+  }
+  assert.throws(() => parseAndValidateGameData(JSON.stringify(broken)), /platforms\[0\]\.y/)
+})
+
+test('a level missing goal throws naming its path — no exit, no factory-playable floor', () => {
+  const broken = {
+    levels: [
+      { id: 'level-1', name: 'x', backgroundLevel: 1, playerSpawn: { x: 100, y: 100 }, platforms: [{ x: 0, y: 436, width: 960, height: 40 }], initialCoins: [], initialObstacles: [] },
+    ],
+  }
+  assert.throws(() => parseAndValidateGameData(JSON.stringify(broken)), /levels\[0\]\.goal/)
+})
+
 test('backgroundLevel 0 breaks the game-assets level<N> numbering contract and throws', () => {
   const broken = {
-    levels: [{ id: 'level-1', name: 'x', backgroundLevel: 0, playerSpawn: { x: 10, y: 10 }, initialCoins: [], initialObstacles: [] }],
+    levels: [{ id: 'level-1', name: 'x', backgroundLevel: 0, playerSpawn: { x: 10, y: 10 }, platforms: [{ x: 0, y: 436, width: 960, height: 40 }], goal: { x: 900, y: 412 }, initialCoins: [], initialObstacles: [] }],
   }
   assert.throws(() => parseAndValidateGameData(JSON.stringify(broken)), /backgroundLevel/)
 })
@@ -219,6 +250,8 @@ test('re-initializing with different data changes the active level, and stale co
         name: '第二关',
         backgroundLevel: 2,
         playerSpawn: { x: 100, y: 100 },
+        platforms: [{ x: 0, y: 436, width: 960, height: 40 }],
+        goal: { x: 500, y: 412 },
         initialCoins: [],
         initialObstacles: [],
       },

@@ -17,7 +17,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { normalizeGameDoc, resolveLevelDoc } from '../src/game-doc.ts'
+import { normalizeGameDoc, resolveLevelDoc, resolveScreens, resolveTheme, DEFAULT_SCREENS } from '../src/game-doc.ts'
 
 const VALID_DOC = {
   title: '测试游戏',
@@ -108,4 +108,70 @@ test('resolveLevelDoc() falls back to a generic entry for an unknown scene key i
   assert.equal(level.name, 'SomeOtherLevel')
   assert.equal(typeof level.goal, 'string')
   assert.ok(level.goal.length > 0)
+})
+
+// ───────────────────────────────────────────────────────────────────────
+// Fixed-screen copy + theme (issue #11): the Start/GameOver pages must be
+// renderable COMPLETE even with no doc at all — that is the whole "the
+// auxiliary pages didn't exist yet" fix. resolveScreens/resolveTheme are the
+// machinery; these tests pin its fallback semantics.
+// ───────────────────────────────────────────────────────────────────────
+
+test('resolveScreens(null) still yields every default string — the pages render with no game-doc.json at all', () => {
+  const screens = resolveScreens(null)
+  // Every field filled, none empty — except startTitle which falls through to
+  // the generic '开始' fallback when there is no title to inherit.
+  for (const [key, value] of Object.entries(screens)) {
+    assert.equal(typeof value, 'string', `${key} must be a string`)
+    assert.ok(value.length > 0, `${key} must be non-empty`)
+  }
+})
+
+test('resolveScreens: startTitle falls back to the doc title, then to the generic fallback', () => {
+  const doc = normalizeGameDoc(VALID_DOC)
+  assert.equal(resolveScreens(doc).startTitle, VALID_DOC.title, 'doc title wins')
+  const screensOverride = normalizeGameDoc({
+    ...VALID_DOC,
+    screens: { startTitle: '自定义标题' },
+  })
+  assert.equal(resolveScreens(screensOverride).startTitle, '自定义标题', 'an explicit override wins over the doc title')
+})
+
+test('resolveScreens merges per-field overrides onto the defaults, leaving the rest untouched', () => {
+  const doc = normalizeGameDoc({
+    ...VALID_DOC,
+    screens: { winTitle: '通关！', retryButton: '再来' },
+  })
+  const screens = resolveScreens(doc)
+  assert.equal(screens.winTitle, '通关！')
+  assert.equal(screens.retryButton, '再来')
+  assert.equal(screens.startButton, DEFAULT_SCREENS.startButton, 'un-overridden fields keep defaults')
+  assert.equal(screens.loseTitle, DEFAULT_SCREENS.loseTitle)
+})
+
+test('a screens section with an invalid field type degrades to defaults for the WHOLE section, not a half-page', () => {
+  const doc = normalizeGameDoc({ ...VALID_DOC, screens: { winTitle: 42 } })
+  // readScreens rejects the whole section ({}), so resolveScreens falls back
+  // to pure defaults — a broken override can never produce a page with some
+  // strings from the doc and some from nowhere.
+  const screens = resolveScreens(doc)
+  assert.equal(screens.winTitle, DEFAULT_SCREENS.winTitle)
+})
+
+test('an invalid theme colour degrades the whole theme to defaults', () => {
+  const doc = normalizeGameDoc({
+    ...VALID_DOC,
+    theme: { heading: 'not-a-hex', accent: '#4f8cff' },
+  })
+  const theme = resolveTheme(doc)
+  assert.equal(theme.heading, resolveTheme(null).heading, 'bad hex loses the whole section')
+  assert.equal(theme.accent, resolveTheme(null).accent, 'even the valid field falls back with its section')
+})
+
+test('a valid single-colour theme override merges per-colour', () => {
+  const doc = normalizeGameDoc({ ...VALID_DOC, theme: { accent: '#ff8800' } })
+  const theme = resolveTheme(doc)
+  assert.equal(theme.accent, '#ff8800')
+  assert.equal(theme.backdrop, resolveTheme(null).backdrop)
+  assert.equal(theme.heading, resolveTheme(null).heading)
 })
