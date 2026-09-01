@@ -220,6 +220,9 @@ async function main() {
         '(document.querySelector("#cogito-screens [data-cogito-result]") || {getAttribute: () => null}).getAttribute("data-cogito-result")',
       )
 
+    const readLevelId = () =>
+      evalIn('window.__gameHarness ? window.__gameHarness.getSnapshot().levelId : null')
+
     const snapshotValue = async () =>
       JSON.parse(await evalIn('JSON.stringify(window.__gameHarness.getSnapshot())'))
 
@@ -312,6 +315,12 @@ async function main() {
       return 'stateId=Game'
     })
 
+    // SC-5 fills these; SC-6/SC-7 read them — the multi-level branch of the
+    // walk chain, shared across steps because the poll and the fixed-page
+    // checks belong to different steps by design.
+    let baselineLevelId = null
+    let finishedByAdvance = false
+
     await runner.step('SC-5', 'tutorial world has player and goal', async () => {
       const snapshot = await snapshotValue()
       const names = snapshot.entities.map((e) => e.name)
@@ -319,8 +328,9 @@ async function main() {
       if (missing.length > 0) {
         throw new Error(`snapshot entities [${names.join(', ')}] are missing: ${missing.join(', ')}`)
       }
+      baselineLevelId = snapshot.levelId
       await shot('02-game.png')
-      return `entities: ${names.join(', ')}; score=${snapshot.score}; screenshot: 02-game.png`
+      return `entities: ${names.join(', ')}; score=${snapshot.score}; levelId=${snapshot.levelId}; screenshot: 02-game.png`
     })
 
     await runner.step('SC-6', 'real input walk reaches the goal (cleared)', async () => {
@@ -331,11 +341,23 @@ async function main() {
         const taps = planJumpTaps(WALK_TIMEOUT_MS, JUMP_INTERVAL_MS, JUMP_HOLD_MS)
         let tapIndex = 0
         const walkStart = Date.now()
+        // Single-level project: the walk ends in GameOver(cleared).
+        // Multi-level project (template 0.9.0): clearing a level WITH a
+        // successor restarts Game on the next level instead of showing
+        // GameOver — that advance is this poll's second legal outcome,
+        // visible as levelId moving off SC-5's baseline. Both prove the
+        // same floor: the goal overlap actually fires and the chain lives.
         const finish = await pollUntil(
-          'GameOver(cleared)',
+          'cleared or level advance',
           async () => {
-            if ((await readState()) !== 'GameOver') return null
-            return (await readResult()) === 'cleared' ? 'cleared' : null
+            if ((await readState()) === 'GameOver') {
+              return (await readResult()) === 'cleared' ? 'cleared' : null
+            }
+            const levelId = await readLevelId()
+            if (levelId !== null && baselineLevelId !== null && levelId !== baselineLevelId) {
+              return `advanced->${levelId}`
+            }
+            return null
           },
           {
             timeoutMs: WALK_TIMEOUT_MS,
@@ -348,6 +370,7 @@ async function main() {
             },
           },
         )
+        finishedByAdvance = finish.startsWith('advanced->')
         const snapshot = await snapshotValue()
         return `${finish} in ${((Date.now() - walkStart) / 1000).toFixed(1)}s; final score=${snapshot.score}`
       } finally {
@@ -355,8 +378,20 @@ async function main() {
       }
     })
 
-    await runner.step('SC-7', 'GameOver title pixels are visible', async () =>
-      assertCopyPixels('#cogito-screens [data-cogito-copy="gameover-title"]', '03-gameover.png', 0.04))
+    await runner.step('SC-7', 'GameOver title pixels are visible', async () => {
+      // Multi-level project: SC-6 legitimately never reached this page —
+      // the last level's GameOver only appears after beating every level,
+      // which is the project's own acceptance territory, not the
+      // template's floor. The fixed pages still must render for THIS
+      // project, so jump there through the same door every assertion uses
+      // (harness applyState), and say so in the evidence — never silently.
+      if (finishedByAdvance) {
+        await evalIn('window.__gameHarness.applyState("GameOver")')
+        await pollUntil('GameOver state after harness jump', waitForState('GameOver'), { timeoutMs: 10_000 })
+      }
+      const evidence = await assertCopyPixels('#cogito-screens [data-cogito-copy="gameover-title"]', '03-gameover.png', 0.04)
+      return finishedByAdvance ? `${evidence} (reached via harness applyState — SC-6 advanced to the next level, not a real walk to GameOver)` : evidence
+    })
 
     await runner.step('SC-8', '回标题页 returns to the Start state', async () => {
       await clickCenter('#cogito-screens [data-cogito="back-title"]')

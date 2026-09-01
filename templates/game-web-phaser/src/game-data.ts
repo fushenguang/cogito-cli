@@ -462,6 +462,26 @@ export function getLevelById(id: string): GameLevelEntry | null {
   return level ?? null
 }
 
+/** How many levels the manifest declares. No consumption side effect — the advance-vs-GameOver branch reads this. */
+export function getLevelCount(): number {
+  return requireInitialized().levels.length
+}
+
+/**
+ * A level by its 0-based position in `levels`, or `null` when out of range —
+ * the caller owns the branch (GameScene treats null as an error, never a
+ * silent fallback to levels[0]). Records consumption on hit, so a level
+ * reachable only through this accessor still shows up in the harness's
+ * `data.usedInScene` evidence. Before 0.9.0 `levels[1..]` had no consumer at
+ * all — declared levels simply could not be reached, which is what this and
+ * GameScene's `levelIndex` flow close.
+ */
+export function getLevelByIndex(index: number): GameLevelEntry | null {
+  const level = requireInitialized().levels[index]
+  if (level) consume(`levels:${level.id}`, 'levels')
+  return level ?? null
+}
+
 /** Gameplay parameters. Records consumption as `rules`. Throws locatably if the manifest declared no `rules` section. */
 export function getGameRules(): GameRules {
   const rules = requireInitialized().rules
