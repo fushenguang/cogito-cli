@@ -56,6 +56,20 @@ jobs:
       - name: Build all packages
         run: pnpm build
 
+      # Factory-playable pre-release check (2026-09-01): the game-web-phaser
+      # template ships a playable floor and build:play's postbuild selfcheck
+      # re-proves it through real headless input. This exercises the exact
+      # published artifact path: built CLI → cc init into a fresh dir →
+      # frozen install → build:play. Red here must block publishing — a
+      # template edit that breaks the tutorial level is not releasable.
+      # The selfcheck needs a Chromium; install one into the Playwright cache
+      # the template's find-browser.mjs discovers (zero template deps added).
+      - name: Install Chromium for the template selfcheck
+        run: npx -y playwright@1.49.0 install chromium --with-deps
+
+      - name: Factory-playable pre-release check
+        run: pnpm check:template
+
       # changesets/action does two things depending on state:
       #  1. If .changeset/*.md files exist → opens/updates a "Version Packages" PR
       #  2. If "Version Packages" PR is merged → publishes to npm
