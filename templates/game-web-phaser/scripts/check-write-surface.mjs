@@ -30,6 +30,14 @@ export const PROJECT_ROOT = join(__dirname, '..')
 
 /** The root commit's marker — cc init's initial commit message. */
 export const SCAFFOLD_ROOT_MARKER = 'cc init: scaffold'
+/**
+ * The re-baseline marker — `cc upgrade` lands template updates as one
+ * commit with this subject (packages/cc/src/core/upgrade.ts). The gate
+ * judges against the NEWEST such commit when one exists, so a platform
+ * upgrade never reads as executor edits. Honesty convention, not a
+ * security boundary — same standing as this gate itself.
+ */
+export const UPGRADE_BASE_MARKER = 'cc upgrade: template'
 
 /**
  * The AI write surface (v1). Synchronized word-for-word with AGENTS.md's
@@ -151,8 +159,15 @@ export async function checkWriteSurface() {
     return { applicable: false, violations: [], checked: 0, rootCommit }
   }
 
+  // Baseline = the newest `cc upgrade` commit if any, else the scaffold
+  // root. git log walks newest-first, so the first hit IS the newest.
+  const upgradeCommit = git([
+    'log', '--fixed-strings', `--grep=${UPGRADE_BASE_MARKER}`, '-n', '1', '--pretty=%H', 'HEAD',
+  ])
+  const baseline = upgradeCommit ?? rootCommit
+
   const changed = new Set()
-  for (const line of (git(['diff', '--name-only', `${rootCommit}..HEAD`]) ?? '').split('\n')) {
+  for (const line of (git(['diff', '--name-only', `${baseline}..HEAD`]) ?? '').split('\n')) {
     if (line) changed.add(line)
   }
   for (const line of (gitRaw(['status', '--porcelain']) ?? '').split('\n')) {
@@ -166,11 +181,11 @@ export async function checkWriteSurface() {
     if (isIgnored(path)) continue
     checked += 1
     const existedAtRoot =
-      git(['cat-file', '-e', `${rootCommit}:${path}`]) !== null
+      git(['cat-file', '-e', `${baseline}:${path}`]) !== null
     const judged = judgeWriteSurface(path, { existedAtRoot })
     if (!judged.ok) violations.push({ path, reason: judged.reason ?? 'outside the write surface' })
   }
-  return { applicable: true, violations, checked, rootCommit }
+  return { applicable: true, violations, checked, rootCommit, baseline }
 }
 
 const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
